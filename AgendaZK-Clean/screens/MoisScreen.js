@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
-import { format } from 'date-fns';
+import { format, addMonths, subMonths } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import SearchComponent from '../components/SearchComponent';
 
@@ -30,7 +30,7 @@ LocaleConfig.locales['fr'] = {
     'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'
   ],
   dayNames: ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'],
-  dayNamesShort: ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'],
+  dayNamesShort: ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'],
   today: "Aujourd'hui"
 };
 LocaleConfig.defaultLocale = 'fr';
@@ -100,6 +100,18 @@ export default function MoisScreen({ navigation }) {
 
   const handleDayPress = (day) => {
     setSelectedDate(day.dateString);
+  };
+
+  const goToPreviousMonth = () => {
+    const newMonth = subMonths(new Date(currentMonth), 1);
+    const newMonthString = format(newMonth, 'yyyy-MM-01');
+    handleMonthChange({ dateString: newMonthString });
+  };
+
+  const goToNextMonth = () => {
+    const newMonth = addMonths(new Date(currentMonth), 1);
+    const newMonthString = format(newMonth, 'yyyy-MM-01');
+    handleMonthChange({ dateString: newMonthString });
   };
 
   const handleMonthChange = (month) => {
@@ -315,7 +327,11 @@ export default function MoisScreen({ navigation }) {
           monthFormat={'MMMM yyyy'}
           hideArrows={false}
           renderArrow={(direction) => (
-            <TouchableOpacity style={styles.arrowContainer}>
+            <TouchableOpacity 
+              style={styles.arrowContainer}
+              onPress={direction === 'left' ? goToPreviousMonth : goToNextMonth}
+              activeOpacity={0.7}
+            >
               <Ionicons 
                 name={direction === 'left' ? 'chevron-back' : 'chevron-forward'} 
                 size={22} 
@@ -453,15 +469,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   arrowContainer: {
-    padding: 10,
+    padding: 12,
     borderRadius: 25,
     backgroundColor: 'rgba(33, 150, 243, 0.15)',
     margin: 5,
-    elevation: 2,
+    elevation: 3,
     shadowColor: '#2196F3',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(33, 150, 243, 0.3)',
   },
   divider: {
     height: 1,
