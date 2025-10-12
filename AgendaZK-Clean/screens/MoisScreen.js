@@ -1,15 +1,11 @@
-import React, { useState, useLayoutEffect } from 'react';
+import React, { useState, useLayoutEffect, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
-  Modal,
-  Alert,
   BackHandler,
-  Animated,
   Vibration,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { format, addMonths, subMonths } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import SearchComponent from '../components/SearchComponent';
+import EventModal from '../components/EventModal';
+import eventService from '../services/eventService';
+import DateUtils from '../utils/dateUtils';
 
 // Configuration de la locale française pour le calendrier
 LocaleConfig.locales['fr'] = {
@@ -39,25 +38,28 @@ export default function MoisScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [currentMonth, setCurrentMonth] = useState(format(new Date(), 'yyyy-MM-01'));
-  const [rappels, setRappels] = useState({
-    [format(new Date(), 'yyyy-MM-dd')]: [
-      { id: 1, titre: 'Réunion équipe', heure: '10:00' },
-      { id: 2, titre: 'Appel client', heure: '14:30' },
-    ]
-  });
+  const [events, setEvents] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newRappelText, setNewRappelText] = useState('');
-  
-  // Animation pour le changement de mois avec effet flip 3D
-  const rotateYAnim = useState(new Animated.Value(0))[0];
-  const scaleAnim = useState(new Animated.Value(1))[0];
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+
+  // Écouter les changements d'événements
+  useEffect(() => {
+    const unsubscribe = eventService.addListener((newEvents) => {
+      setEvents(newEvents);
+    });
+
+    // Charger les événements initiaux
+    setEvents(eventService.getEvents());
+
+    return unsubscribe;
+  }, []);
 
   // Gestion du bouton retour Android pour le modal
-  React.useEffect(() => {
+  useEffect(() => {
     const backAction = () => {
-      if (showAddModal) {
-        setShowAddModal(false);
+      if (showEventModal) {
+        setShowEventModal(false);
         return true; // Empêche le comportement par défaut
       }
       return false; // Laisse le comportement par défaut
@@ -69,20 +71,12 @@ export default function MoisScreen({ navigation }) {
     );
 
     return () => backHandler.remove();
-  }, [showAddModal]);
+  }, [showEventModal]);
 
   useLayoutEffect(() => {
     const dateString = format(new Date(), 'EEE d MMM', { locale: fr });
     
     navigation.setOptions({
-      headerLeft: () => (
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => navigation.openDrawer()}
-        >
-          <Ionicons name="menu" size={24} color="#fff" />
-        </TouchableOpacity>
-      ),
       headerRight: () => (
         <View style={styles.headerRight}>
           <Text style={styles.dateText}>{dateString}</Text>
@@ -94,7 +88,7 @@ export default function MoisScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       ),
-      headerTitle: '',
+      headerTitle: 'Agenda',
     });
   }, [navigation]);
 
@@ -122,131 +116,100 @@ export default function MoisScreen({ navigation }) {
       // Ignore si la vibration n'est pas supportée
     }
     
-    // Animation de flip 3D spectaculaire lors du changement de mois
-    Animated.sequence([
-      // Phase 1: Rotation vers l'arrière avec zoom out
-      Animated.parallel([
-        Animated.timing(rotateYAnim, {
-          toValue: 1, // 90 degrés
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 0.8,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-      ]),
-      // Phase 2: Changement de contenu (au milieu du flip)
-      Animated.timing(rotateYAnim, {
-        toValue: 2, // 180 degrés
-        duration: 0,
-        useNativeDriver: true,
-      }),
-      // Phase 3: Rotation vers l'avant avec zoom in
-      Animated.parallel([
-        Animated.spring(rotateYAnim, {
-          toValue: 4, // 360 degrés (retour à 0)
-          tension: 80,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          tension: 80,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start(() => {
-      // Reset à 0 après l'animation
-      rotateYAnim.setValue(0);
-    });
-    
+    // Animation simplifiée temporairement pour éviter les conflits Worklets
     setCurrentMonth(month.dateString);
   };
 
-  const ajouterRappel = () => {
-    if (newRappelText.trim()) {
-      const newRappel = {
-        id: Date.now(),
-        titre: newRappelText.trim(),
-        heure: format(new Date(), 'HH:mm'),
-      };
-      
-      setRappels(prev => ({
-        ...prev,
-        [selectedDate]: [...(prev[selectedDate] || []), newRappel]
-      }));
-      
-      setNewRappelText('');
-      setShowAddModal(false);
+  const handleEventCreated = (newEvent) => {
+    console.log('Nouvel événement créé:', newEvent);
+  };
+
+  const handleEventUpdated = (updatedEvent) => {
+    console.log('Événement mis à jour:', updatedEvent);
+  };
+
+  const handleEditEvent = (event) => {
+    setSelectedEvent(event);
+    setShowEventModal(true);
+  };
+
+  const handleDeleteEvent = async (eventId) => {
+    try {
+      await eventService.deleteEvent(eventId);
+      console.log('Événement supprimé:', eventId);
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error);
     }
   };
 
-  const supprimerRappel = (rappelId) => {
-    Alert.alert(
-      'Supprimer le rappel',
-      'Êtes-vous sûr de vouloir supprimer ce rappel ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: () => {
-            setRappels(prev => ({
-              ...prev,
-              [selectedDate]: prev[selectedDate]?.filter(r => r.id !== rappelId) || []
-            }));
-          },
-        },
-      ]
-    );
+  const openEventModal = () => {
+    setSelectedEvent(null);
+    setShowEventModal(true);
   };
 
-  const markedDates = {
-    [selectedDate]: {
-      selected: true,
-      selectedColor: '#2196F3',
-    },
-    ...Object.keys(rappels).reduce((acc, date) => {
-      if (rappels[date] && rappels[date].length > 0 && date !== selectedDate) {
-        acc[date] = { marked: true, dotColor: '#2196F3' };
+  const closeEventModal = () => {
+    setSelectedEvent(null);
+    setShowEventModal(false);
+  };
+
+  // Créer les dates marquées pour le calendrier
+  const createMarkedDates = () => {
+    const marked = {
+      [selectedDate]: {
+        selected: true,
+        selectedColor: '#2196F3',
       }
-      return acc;
-    }, {}),
+    };
+
+    // Marquer les dates avec des événements
+    events.forEach(event => {
+      if (event.type === 'single_day') {
+        // Événement d'un jour
+        if (event.startDate !== selectedDate) {
+          marked[event.startDate] = {
+            ...marked[event.startDate],
+            marked: true,
+            dotColor: event.visibility === 'private' ? '#ff9800' : '#2196F3',
+          };
+        }
+      } else if (event.type === 'date_range') {
+        // Événement sur plusieurs jours - créer une période
+        const startDate = new Date(event.startDate);
+        const endDate = new Date(event.endDate);
+        const days = DateUtils.getDaysInRange(startDate, endDate);
+        
+        days.forEach((day, index) => {
+          const dateString = DateUtils.toISODateString(day);
+          
+          if (dateString !== selectedDate) {
+            const isFirst = index === 0;
+            const isLast = index === days.length - 1;
+            const color = event.visibility === 'private' ? '#ff9800' : '#2196F3';
+            
+            marked[dateString] = {
+              ...marked[dateString],
+              startingDay: isFirst,
+              endingDay: isLast,
+              color: color,
+              textColor: 'white',
+            };
+          }
+        });
+      }
+    });
+
+    return marked;
   };
 
-  const rappelsDuJour = rappels[selectedDate] || [];
+  const markedDates = createMarkedDates();
+
+  // Obtenir les événements du jour sélectionné
+  const eventsOfSelectedDate = eventService.getEventsByDate(selectedDate);
 
   return (
     <View style={styles.container}>
       <View style={styles.calendarWrapper}>
-        <Animated.View 
-          style={[
-            styles.calendarContainer,
-            {
-              transform: [
-                { 
-                  rotateY: rotateYAnim.interpolate({
-                    inputRange: [0, 1, 2, 3, 4],
-                    outputRange: ['0deg', '90deg', '180deg', '270deg', '360deg'],
-                  })
-                },
-                { scale: scaleAnim },
-                { perspective: 1000 }
-              ],
-              shadowOpacity: scaleAnim.interpolate({
-                inputRange: [0.8, 1],
-                outputRange: [0.4, 0.2],
-              }),
-              elevation: scaleAnim.interpolate({
-                inputRange: [0.8, 1],
-                outputRange: [12, 8],
-              }),
-            },
-          ]}
-        >
+        <View style={styles.calendarContainer}>
         <Calendar
           current={currentMonth}
           onDayPress={handleDayPress}
@@ -340,90 +303,111 @@ export default function MoisScreen({ navigation }) {
             </TouchableOpacity>
           )}
         />
-        </Animated.View>
+        </View>
       </View>
 
       <View style={styles.divider} />
 
       <View style={styles.daySection}>
         <Text style={styles.daySectionTitle}>
-          {format(new Date(selectedDate), 'EEEE d MMMM yyyy', { locale: fr })}
+          {DateUtils.formatDateLong(selectedDate)}
         </Text>
         
-        <ScrollView style={styles.rappelsList}>
-          {rappelsDuJour.length === 0 ? (
-            <Text style={styles.noRappelsText}>Aucun rappel pour ce jour</Text>
+        <ScrollView style={styles.eventsList}>
+          {eventsOfSelectedDate.length === 0 ? (
+            <Text style={styles.noEventsText}>Aucun événement pour ce jour</Text>
           ) : (
-            rappelsDuJour.map((rappel) => (
-              <View key={rappel.id} style={styles.rappelItem}>
-                <View style={styles.rappelContent}>
-                  <Text style={styles.rappelTitre}>{rappel.titre}</Text>
-                  <Text style={styles.rappelHeure}>{rappel.heure}</Text>
+            eventsOfSelectedDate.map((event) => (
+              <TouchableOpacity 
+                key={event.id} 
+                style={[
+                  styles.eventItem,
+                  event.visibility === 'private' && styles.privateEventItem
+                ]}
+                onPress={() => handleEditEvent(event)}
+              >
+                <View style={styles.eventContent}>
+                  <View style={styles.eventHeader}>
+                    <Text style={styles.eventTitle}>{event.title}</Text>
+                    <View style={styles.eventMeta}>
+                      <Ionicons 
+                        name={event.visibility === 'private' ? 'lock-closed' : 'people'} 
+                        size={12} 
+                        color={event.visibility === 'private' ? '#ff9800' : '#2196F3'} 
+                      />
+                      {event.notifications && event.notifications.length > 0 && (
+                        <Ionicons name="notifications" size={12} color="#666" style={{ marginLeft: 4 }} />
+                      )}
+                    </View>
+                  </View>
+                  
+                  {event.type === 'date_range' && (
+                    <Text style={styles.eventDates}>
+                      Du {DateUtils.formatDate(event.startDate)} au {DateUtils.formatDate(event.endDate)}
+                    </Text>
+                  )}
+                  
+                  {!event.isAllDay && event.startTime && (
+                    <Text style={styles.eventTime}>
+                      {event.startTime}{event.endTime ? ` - ${event.endTime}` : ''}
+                      {event.endTime && event.type === 'single_day' && (
+                        <Text style={styles.eventDuration}>
+                          {' '}({DateUtils.formatDuration(DateUtils.calculateDurationInMinutes(event.startTime, event.endTime))})
+                        </Text>
+                      )}
+                    </Text>
+                  )}
+                  
+                  {event.isAllDay && (
+                    <Text style={styles.eventTime}>Journée entière</Text>
+                  )}
                 </View>
-                <TouchableOpacity
-                  onPress={() => supprimerRappel(rappel.id)}
-                  style={styles.deleteButton}
-                >
-                  <Ionicons name="trash-outline" size={20} color="#ff4444" />
-                </TouchableOpacity>
-              </View>
+                
+                <View style={styles.eventActions}>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteEvent(event.id)}
+                    style={styles.deleteButton}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#ff4444" />
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
             ))
           )}
         </ScrollView>
 
         <TouchableOpacity 
           style={[styles.addButton, { marginBottom: insets.bottom + 16 }]} 
-          onPress={() => setShowAddModal(true)}
+          onPress={openEventModal}
         >
           <Ionicons name="add" size={24} color="#fff" />
-          <Text style={styles.addButtonText}>Ajouter un rappel</Text>
+          <Text style={styles.addButtonText}>Ajouter un événement</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Modal d'ajout de rappel */}
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity 
-              onPress={() => setShowAddModal(false)}
-              style={styles.modalCloseButton}
-            >
-              <Ionicons name="close" size={24} color="#2196F3" />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Nouveau rappel</Text>
-            <TouchableOpacity 
-              onPress={ajouterRappel}
-              style={styles.modalSaveButton}
-            >
-              <Text style={styles.modalSaveText}>Sauver</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.modalContent}>
-            <Text style={styles.modalDateText}>
-              {format(new Date(selectedDate), 'EEEE d MMMM yyyy', { locale: fr })}
-            </Text>
-            
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Titre du rappel..."
-              value={newRappelText}
-              onChangeText={setNewRappelText}
-              autoFocus
-              multiline
-            />
-          </View>
-        </View>
-      </Modal>
+      <EventModal
+        visible={showEventModal}
+        onClose={closeEventModal}
+        selectedDate={selectedDate}
+        event={selectedEvent}
+        onEventCreated={handleEventCreated}
+        onEventUpdated={handleEventUpdated}
+      />
 
       <SearchComponent
         visible={showSearch}
         onClose={() => setShowSearch(false)}
-        rappels={rappels}
+        rappels={events.reduce((acc, event) => {
+          if (!acc[event.startDate]) {
+            acc[event.startDate] = [];
+          }
+          acc[event.startDate].push({
+            id: event.id,
+            titre: event.title,
+            heure: event.startTime || 'Journée entière',
+          });
+          return acc;
+        }, {})}
         onSelectDate={(date) => setSelectedDate(date)}
       />
     </View>
@@ -499,7 +483,16 @@ const styles = StyleSheet.create({
   rappelsList: {
     flex: 1,
   },
+  eventsList: {
+    flex: 1,
+  },
   noRappelsText: {
+    textAlign: 'center',
+    color: '#666',
+    fontSize: 16,
+    marginTop: 20,
+  },
+  noEventsText: {
     textAlign: 'center',
     color: '#666',
     fontSize: 16,
@@ -517,18 +510,74 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 2.22,
   },
+  eventItem: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    padding: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 2.22,
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196F3',
+  },
+  privateEventItem: {
+    borderLeftColor: '#ff9800',
+    backgroundColor: '#fff8f0',
+  },
   rappelContent: {
     flex: 1,
+  },
+  eventContent: {
+    flex: 1,
+  },
+  eventHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  eventMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   rappelTitre: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#2d4150',
   },
+  eventTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2d4150',
+    flex: 1,
+    marginRight: 8,
+  },
   rappelHeure: {
     fontSize: 14,
     color: '#666',
     marginTop: 4,
+  },
+  eventTime: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  eventDates: {
+    fontSize: 13,
+    color: '#2196F3',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  eventDuration: {
+    color: '#999',
+    fontSize: 12,
+  },
+  eventActions: {
+    justifyContent: 'center',
   },
   deleteButton: {
     padding: 8,

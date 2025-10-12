@@ -1,5 +1,5 @@
 import React from 'react';
-import { createDrawerNavigator } from '@react-navigation/drawer';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -9,21 +9,21 @@ import MoisScreen from '../screens/MoisScreen';
 import SemaineScreen from '../screens/SemaineScreen';
 import JourScreen from '../screens/JourScreen';
 import ReminderScreen from '../screens/ReminderScreen';
-import CorbeilleScreen from '../screens/CorbeilleScreen';
 
-const Drawer = createDrawerNavigator();
+const Tab = createBottomTabNavigator();
 
 export default function DrawerNavigator() {
   return (
     <NavigationContainer>
-      <Drawer.Navigator 
+      <Tab.Navigator 
         initialRouteName="Mois"
         screenOptions={{
-          drawerActiveTintColor: '#2196F3',
-          drawerInactiveTintColor: '#666',
-          drawerStyle: {
+          tabBarActiveTintColor: '#2196F3',
+          tabBarInactiveTintColor: '#666',
+          tabBarStyle: {
             backgroundColor: '#f8f9fa',
-            width: 250,
+            borderTopWidth: 1,
+            borderTopColor: '#e0e0e0',
           },
           headerStyle: {
             backgroundColor: '#2196F3',
@@ -34,61 +34,52 @@ export default function DrawerNavigator() {
           },
         }}
       >
-        <Drawer.Screen 
+        <Tab.Screen 
           name="Année" 
           component={AnneeScreen}
           options={{
-            drawerIcon: ({ color }) => (
-              <Ionicons name="calendar" size={20} color={color} />
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="calendar" size={size} color={color} />
             ),
           }}
         />
-        <Drawer.Screen 
+        <Tab.Screen 
           name="Mois" 
           component={MoisScreen}
           options={{
-            drawerIcon: ({ color }) => (
-              <Ionicons name="calendar-outline" size={20} color={color} />
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="calendar-outline" size={size} color={color} />
             ),
           }}
         />
-        <Drawer.Screen 
+        <Tab.Screen 
           name="Semaine" 
           component={SemaineScreen}
           options={{
-            drawerIcon: ({ color }) => (
-              <Ionicons name="grid-outline" size={20} color={color} />
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="grid-outline" size={size} color={color} />
             ),
           }}
         />
-        <Drawer.Screen 
+        <Tab.Screen 
           name="Jour" 
           component={JourScreen}
           options={{
-            drawerIcon: ({ color }) => (
-              <Ionicons name="today-outline" size={20} color={color} />
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="today-outline" size={size} color={color} />
             ),
           }}
         />
-        <Drawer.Screen 
+        <Tab.Screen 
           name="Reminder" 
           component={ReminderScreen}
           options={{
-            drawerIcon: ({ color }) => (
-              <Ionicons name="alarm-outline" size={20} color={color} />
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="alarm-outline" size={size} color={color} />
             ),
           }}
         />
-        <Drawer.Screen 
-          name="Corbeille" 
-          component={CorbeilleScreen}
-          options={{
-            drawerIcon: ({ color }) => (
-              <Ionicons name="trash-outline" size={20} color={color} />
-            ),
-          }}
-        />
-      </Drawer.Navigator>
+      </Tab.Navigator>
     </NavigationContainer>
   );
 }
