@@ -27,6 +27,9 @@ export default function App() {
         throw new Error('Échec de l\'initialisation de Firebase');
       }
 
+      // FORCER l'utilisation du deviceId existant pour Kb
+      await userService.setDeviceId('device_mgnuaf8p_wr0yggv66');
+
       // Initialiser le service utilisateur
       const userInit = await userService.initialize();
       setUser(userInit.user);

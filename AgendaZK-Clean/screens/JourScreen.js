@@ -1,26 +1,21 @@
-import React, { useLayoutEffect, useState } from 'react';
+import React, { useLayoutEffect, useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { format, addDays, subDays } from 'date-fns';
+import { format, addDays, subDays, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import eventService from '../services/eventService';
+import DateUtils from '../utils/dateUtils';
 
 export default function JourScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [currentDay, setCurrentDay] = useState(new Date());
+  const [events, setEvents] = useState([]);
 
   useLayoutEffect(() => {
     const dateString = format(new Date(), 'EEE d MMM', { locale: fr });
     
     navigation.setOptions({
-      headerLeft: () => (
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => navigation.openDrawer()}
-        >
-          <Ionicons name="menu" size={24} color="#fff" />
-        </TouchableOpacity>
-      ),
       headerRight: () => (
         <View style={styles.headerRight}>
           <Text style={styles.dateText}>{dateString}</Text>
@@ -29,9 +24,54 @@ export default function JourScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       ),
-      headerTitle: '',
+      headerTitle: 'Jour',
     });
   }, [navigation]);
+
+  // Écouter les changements d'événements
+  useEffect(() => {
+    const unsubscribe = eventService.addListener((newEvents) => {
+      setEvents(newEvents);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Filtrer les événements du jour
+  const dayEvents = useMemo(() => {
+    const dayKey = format(currentDay, 'yyyy-MM-dd');
+    return events.filter(event => {
+      const eventStart = parseISO(event.startDate);
+      const eventEnd = event.endDate ? parseISO(event.endDate) : eventStart;
+      
+      return format(eventStart, 'yyyy-MM-dd') <= dayKey && 
+             format(eventEnd, 'yyyy-MM-dd') >= dayKey;
+    });
+  }, [events, currentDay]);
+
+  // Organiser les événements par heure
+  const organizeEventsByHour = useMemo(() => {
+    const organized = {};
+    
+    // Initialiser chaque heure
+    for (let hour = 0; hour < 24; hour++) {
+      organized[hour] = [];
+    }
+
+    dayEvents.forEach(event => {
+      if (event.isAllDay) {
+        // Événement toute la journée - l'ajouter à 8h par défaut
+        organized[8].push(event);
+      } else if (event.startTime) {
+        const hour = parseInt(event.startTime.split(':')[0]);
+        if (hour >= 0 && hour < 24) {
+          organized[hour].push(event);
+        }
+      }
+    });
+
+    return organized;
+  }, [dayEvents]);
 
   const goToPreviousDay = () => {
     setCurrentDay(subDays(currentDay, 1));
@@ -46,13 +86,6 @@ export default function JourScreen({ navigation }) {
   };
 
   const isToday = format(currentDay, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
-
-  // Exemples de rappels pour la démonstration
-  const rappelsDuJour = [
-    { id: 1, titre: 'Réunion équipe', heure: '09:00', duree: 60 },
-    { id: 2, titre: 'Appel client', heure: '14:30', duree: 30 },
-    { id: 3, titre: 'Formation React', heure: '16:00', duree: 120 },
-  ];
 
   return (
     <View style={styles.container}>
@@ -80,23 +113,46 @@ export default function JourScreen({ navigation }) {
       <ScrollView style={styles.timeSlots} showsVerticalScrollIndicator={false}>
         {Array.from({ length: 24 }, (_, hour) => {
           const timeSlot = `${hour.toString().padStart(2, '0')}:00`;
-          const rappelsHeure = rappelsDuJour.filter(rappel => rappel.heure.startsWith(hour.toString().padStart(2, '0')));
+          const hourEvents = organizeEventsByHour[hour] || [];
           
           return (
             <View key={hour} style={styles.timeSlot}>
               <Text style={styles.timeText}>{timeSlot}</Text>
               <View style={styles.eventArea}>
-                {rappelsHeure.map(rappel => (
-                  <TouchableOpacity key={rappel.id} style={styles.eventItem}>
+                {hourEvents.map(event => (
+                  <TouchableOpacity 
+                    key={event.id} 
+                    style={[
+                      styles.eventItem,
+                      event.visibility === 'private' && styles.privateEventItem
+                    ]}
+                  >
                     <View style={styles.eventContent}>
-                      <Text style={styles.eventTitle}>{rappel.titre}</Text>
+                      <Text style={styles.eventTitle}>{event.title}</Text>
                       <Text style={styles.eventTime}>
-                        {rappel.heure} - {rappel.duree} min
+                        {event.isAllDay ? 'Journée entière' : 
+                         event.startTime + (event.endTime ? ` - ${event.endTime}` : '')}
+                        {event.type === 'date_range' && (
+                          <Text style={styles.eventDates}>
+                            {' '}(Du {DateUtils.formatDate(event.startDate)} au {DateUtils.formatDate(event.endDate)})
+                          </Text>
+                        )}
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color="#666" />
+                    <View style={styles.eventMeta}>
+                      <Ionicons 
+                        name={event.visibility === 'private' ? 'lock-closed' : 'people'} 
+                        size={14} 
+                        color={event.visibility === 'private' ? '#ff9800' : '#2196F3'} 
+                      />
+                    </View>
                   </TouchableOpacity>
                 ))}
+                {hourEvents.length === 0 && hour >= 6 && hour <= 22 && (
+                  <View style={styles.emptySlot}>
+                    <Text style={styles.emptySlotText}>Libre</Text>
+                  </View>
+                )}
               </View>
             </View>
           );
@@ -203,6 +259,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 1.0,
   },
+  privateEventItem: {
+    borderLeftColor: '#ff9800',
+    backgroundColor: '#fff8f0',
+  },
   eventContent: {
     flex: 1,
   },
@@ -215,6 +275,23 @@ const styles = StyleSheet.create({
   eventTime: {
     fontSize: 12,
     color: '#666',
+  },
+  eventDates: {
+    fontSize: 11,
+    color: '#2196F3',
+    fontStyle: 'italic',
+  },
+  eventMeta: {
+    marginLeft: 8,
+  },
+  emptySlot: {
+    padding: 8,
+    alignItems: 'center',
+  },
+  emptySlotText: {
+    fontSize: 12,
+    color: '#ccc',
+    fontStyle: 'italic',
   },
   addButton: {
     position: 'absolute',

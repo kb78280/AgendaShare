@@ -65,10 +65,42 @@ class FirebaseService {
 
   async getUser(deviceId) {
     try {
-      const userDoc = await getDoc(doc(this.usersCollection, deviceId));
-      if (userDoc.exists()) {
-        return userDoc.data();
+      console.log('Recherche utilisateur avec deviceId:', deviceId);
+      
+      // Première tentative : rechercher par ID de document
+      const userDocById = await getDoc(doc(this.usersCollection, deviceId));
+      if (userDocById.exists()) {
+        console.log('Utilisateur trouvé par ID de document:', userDocById.data());
+        return userDocById.data();
       }
+      
+      // Deuxième tentative : rechercher par champ deviceId
+      const userQuery = query(
+        this.usersCollection, 
+        where('deviceId', '==', deviceId)
+      );
+      const querySnapshot = await getDocs(userQuery);
+      
+      if (!querySnapshot.empty) {
+        const userData = querySnapshot.docs[0].data();
+        console.log('Utilisateur trouvé par champ deviceId:', userData);
+        return userData;
+      }
+      
+      // Troisième tentative : rechercher par champ id (ancien système)
+      const userQueryById = query(
+        this.usersCollection, 
+        where('id', '==', deviceId)
+      );
+      const querySnapshotById = await getDocs(userQueryById);
+      
+      if (!querySnapshotById.empty) {
+        const userData = querySnapshotById.docs[0].data();
+        console.log('Utilisateur trouvé par champ id:', userData);
+        return userData;
+      }
+      
+      console.log('Aucun utilisateur trouvé avec deviceId:', deviceId);
       return null;
     } catch (error) {
       console.error('Error getting user:', error);
@@ -78,12 +110,57 @@ class FirebaseService {
 
   async updateUserLastActive(deviceId) {
     try {
-      const userRef = doc(this.usersCollection, deviceId);
-      await updateDoc(userRef, {
-        lastActive: serverTimestamp(),
-      });
+      // Trouver d'abord l'utilisateur pour obtenir la bonne référence
+      const user = await this.getUser(deviceId);
+      if (!user) {
+        console.log('Utilisateur non trouvé pour mise à jour lastActive:', deviceId);
+        return;
+      }
+      
+      // Essayer de mettre à jour par ID de document d'abord
+      try {
+        const userRef = doc(this.usersCollection, deviceId);
+        await updateDoc(userRef, {
+          lastActive: serverTimestamp(),
+        });
+        console.log('LastActive mis à jour par ID de document');
+      } catch (error) {
+        // Si échec, rechercher par query et mettre à jour
+        const userQuery = query(
+          this.usersCollection, 
+          where('deviceId', '==', deviceId)
+        );
+        const querySnapshot = await getDocs(userQuery);
+        
+        if (!querySnapshot.empty) {
+          const docRef = querySnapshot.docs[0].ref;
+          await updateDoc(docRef, {
+            lastActive: serverTimestamp(),
+          });
+          console.log('LastActive mis à jour par query');
+        }
+      }
     } catch (error) {
       console.error('Error updating user last active:', error);
+    }
+  }
+
+  // Méthode de debug pour lister tous les utilisateurs
+  async getAllUsers() {
+    try {
+      const snapshot = await getDocs(this.usersCollection);
+      const users = [];
+      snapshot.forEach(doc => {
+        users.push({
+          docId: doc.id,
+          ...doc.data()
+        });
+      });
+      console.log('Tous les utilisateurs en base:', users);
+      return users;
+    } catch (error) {
+      console.error('Error getting all users:', error);
+      return [];
     }
   }
 

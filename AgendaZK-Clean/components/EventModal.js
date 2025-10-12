@@ -53,10 +53,41 @@ export default function EventModal({
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
+  // États pour les sélecteurs de date
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+
   // États pour les notifications personnalisées
   const [showCustomNotification, setShowCustomNotification] = useState(false);
   const [customNotificationValue, setCustomNotificationValue] = useState(15);
   const [customNotificationUnit, setCustomNotificationUnit] = useState('minutes');
+
+  // Fonctions pour la gestion des dates
+  const handleStartDateChange = (newDate) => {
+    setStartDate(newDate);
+    // Si la date de fin est antérieure à la nouvelle date de début, l'ajuster
+    if (endDate && endDate < newDate) {
+      setEndDate(newDate);
+    }
+    setShowStartDatePicker(false);
+  };
+
+  const handleEndDateChange = (newDate) => {
+    setEndDate(newDate);
+    setShowEndDatePicker(false);
+  };
+
+  const adjustDate = (dateString, days) => {
+    const date = new Date(dateString);
+    date.setDate(date.getDate() + days);
+    return DateUtils.toISODateString(date);
+  };
+
+  const formatDateForPicker = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return DateUtils.formatDate(date, 'dd/MM/yyyy');
+  };
 
   // Initialiser les données quand le modal s'ouvre
   useEffect(() => {
@@ -315,24 +346,102 @@ export default function EventModal({
             <View style={styles.dateRow}>
               <View style={styles.dateInput}>
                 <Text style={styles.dateLabel}>Début</Text>
-                <TouchableOpacity style={[styles.dateButton, errors.startDate && styles.inputError]}>
-                  <Text style={styles.dateButtonText}>
-                    {startDate ? DateUtils.formatDate(startDate) : 'Sélectionner'}
-                  </Text>
-                  <Ionicons name="calendar-outline" size={20} color="#666" />
-                </TouchableOpacity>
+                {showStartDatePicker ? (
+                  <View style={styles.datePickerContainer}>
+                    <View style={styles.datePickerHeader}>
+                      <TouchableOpacity
+                        onPress={() => handleStartDateChange(adjustDate(startDate || selectedDate, -1))}
+                        style={styles.dateAdjustButton}
+                      >
+                        <Ionicons name="chevron-back" size={20} color="#2196F3" />
+                      </TouchableOpacity>
+                      <Text style={styles.datePickerText}>
+                        {formatDateForPicker(startDate || selectedDate)}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => handleStartDateChange(adjustDate(startDate || selectedDate, 1))}
+                        style={styles.dateAdjustButton}
+                      >
+                        <Ionicons name="chevron-forward" size={20} color="#2196F3" />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.datePickerActions}>
+                      <TouchableOpacity
+                        onPress={() => setShowStartDatePicker(false)}
+                        style={styles.datePickerCancelButton}
+                      >
+                        <Text style={styles.datePickerCancelText}>Annuler</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleStartDateChange(startDate || selectedDate)}
+                        style={styles.datePickerConfirmButton}
+                      >
+                        <Text style={styles.datePickerConfirmText}>OK</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity 
+                    style={[styles.dateButton, errors.startDate && styles.inputError]}
+                    onPress={() => setShowStartDatePicker(true)}
+                  >
+                    <Text style={styles.dateButtonText}>
+                      {startDate ? DateUtils.formatDate(startDate) : 'Sélectionner'}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={20} color="#666" />
+                  </TouchableOpacity>
+                )}
                 {errors.startDate && <Text style={styles.errorText}>{errors.startDate}</Text>}
               </View>
               
               {eventType === 'date_range' && (
                 <View style={styles.dateInput}>
                   <Text style={styles.dateLabel}>Fin</Text>
-                  <TouchableOpacity style={[styles.dateButton, errors.endDate && styles.inputError]}>
-                    <Text style={styles.dateButtonText}>
-                      {endDate ? DateUtils.formatDate(endDate) : 'Sélectionner'}
-                    </Text>
-                    <Ionicons name="calendar-outline" size={20} color="#666" />
-                  </TouchableOpacity>
+                  {showEndDatePicker ? (
+                    <View style={styles.datePickerContainer}>
+                      <View style={styles.datePickerHeader}>
+                        <TouchableOpacity
+                          onPress={() => handleEndDateChange(adjustDate(endDate || startDate || selectedDate, -1))}
+                          style={styles.dateAdjustButton}
+                        >
+                          <Ionicons name="chevron-back" size={20} color="#2196F3" />
+                        </TouchableOpacity>
+                        <Text style={styles.datePickerText}>
+                          {formatDateForPicker(endDate || startDate || selectedDate)}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => handleEndDateChange(adjustDate(endDate || startDate || selectedDate, 1))}
+                          style={styles.dateAdjustButton}
+                        >
+                          <Ionicons name="chevron-forward" size={20} color="#2196F3" />
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.datePickerActions}>
+                        <TouchableOpacity
+                          onPress={() => setShowEndDatePicker(false)}
+                          style={styles.datePickerCancelButton}
+                        >
+                          <Text style={styles.datePickerCancelText}>Annuler</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => handleEndDateChange(endDate || startDate || selectedDate)}
+                          style={styles.datePickerConfirmButton}
+                        >
+                          <Text style={styles.datePickerConfirmText}>OK</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <TouchableOpacity 
+                      style={[styles.dateButton, errors.endDate && styles.inputError]}
+                      onPress={() => setShowEndDatePicker(true)}
+                    >
+                      <Text style={styles.dateButtonText}>
+                        {endDate ? DateUtils.formatDate(endDate) : 'Sélectionner'}
+                      </Text>
+                      <Ionicons name="calendar-outline" size={20} color="#666" />
+                    </TouchableOpacity>
+                  )}
                   {errors.endDate && <Text style={styles.errorText}>{errors.endDate}</Text>}
                 </View>
               )}
@@ -565,6 +674,60 @@ const styles = StyleSheet.create({
   dateButtonText: {
     fontSize: 16,
     color: '#2d4150',
+  },
+  datePickerContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  dateAdjustButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#e3f2fd',
+  },
+  datePickerText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2d4150',
+    flex: 1,
+    textAlign: 'center',
+  },
+  datePickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  datePickerCancelButton: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 6,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+  },
+  datePickerCancelText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  datePickerConfirmButton: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 6,
+    backgroundColor: '#2196F3',
+    alignItems: 'center',
+  },
+  datePickerConfirmText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   switchRow: {
     flexDirection: 'row',

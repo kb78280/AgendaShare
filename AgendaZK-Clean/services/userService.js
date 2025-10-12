@@ -18,13 +18,29 @@ class UserService {
       // Récupérer ou générer l'ID de l'appareil
       this.deviceId = await this.getOrCreateDeviceId();
       
-      // Vérifier si l'utilisateur existe déjà
+      console.log('Initialisation avec deviceId:', this.deviceId);
+      
+      // DEBUG: Lister tous les utilisateurs pour voir la structure
+      await firebaseService.getAllUsers();
+      
+      // Vérifier si l'utilisateur existe déjà en Firebase avec ce deviceId
+      const firebaseUser = await firebaseService.getUser(this.deviceId);
+      if (firebaseUser) {
+        console.log('Utilisateur existant trouvé en Firebase:', firebaseUser);
+        this.currentUser = firebaseUser;
+        await this.storeUser(firebaseUser);
+        await firebaseService.updateUserLastActive(this.deviceId);
+        return { user: this.currentUser, isFirstTime: false };
+      }
+      
+      // Vérifier si l'utilisateur existe localement
       const storedUser = await this.getStoredUser();
       if (storedUser) {
-        // Vérifier si l'utilisateur existe toujours en base
-        const firebaseUser = await firebaseService.getUser(this.deviceId);
-        if (firebaseUser) {
-          this.currentUser = firebaseUser;
+        console.log('Utilisateur trouvé localement:', storedUser);
+        // Vérifier si l'utilisateur existe toujours en base avec l'ancien système
+        const firebaseUserByStored = await firebaseService.getUser(storedUser.id || storedUser.deviceId);
+        if (firebaseUserByStored) {
+          this.currentUser = firebaseUserByStored;
           await firebaseService.updateUserLastActive(this.deviceId);
           return { user: this.currentUser, isFirstTime: false };
         } else {
@@ -33,6 +49,7 @@ class UserService {
         }
       }
       
+      console.log('Aucun utilisateur existant trouvé, première connexion');
       return { user: null, isFirstTime: true };
     } catch (error) {
       console.error('Error initializing user service:', error);
@@ -46,49 +63,63 @@ class UserService {
       // Vérifier d'abord le stockage local
       let deviceId = await AsyncStorage.getItem(DEVICE_ID_KEY);
       
-      if (!deviceId) {
-        // Générer un nouvel ID basé sur les informations disponibles
-        try {
-          // Utiliser l'ID d'installation Expo s'il est disponible
-          const installationId = Constants.installationId || 'unknown';
-          const sessionId = Constants.sessionId || 'unknown';
-          
-          // Créer un ID unique combinant plusieurs sources
-          const timestamp = Date.now().toString(36);
-          const randomPart = Math.random().toString(36).substr(2, 9);
-          
-          deviceId = `expo_${installationId}_${sessionId}_${timestamp}_${randomPart}`;
-        } catch (error) {
-          console.warn('Erreur lors de la génération de l\'ID avec Expo:', error);
-          // Fallback: générer un ID basé sur le timestamp et random
-          const timestamp = Date.now().toString(36);
-          const randomPart = Math.random().toString(36).substr(2, 9);
-          deviceId = `device_${timestamp}_${randomPart}`;
-        }
-        
-        // S'assurer que l'ID n'est pas trop long
-        if (deviceId.length > 50) {
-          const timestamp = Date.now().toString(36);
-          const randomPart = Math.random().toString(36).substr(2, 9);
-          deviceId = `device_${timestamp}_${randomPart}`;
-        }
-        
-        // Stocker l'ID
-        await AsyncStorage.setItem(DEVICE_ID_KEY, deviceId);
-        console.log('Nouvel ID généré:', deviceId);
+      if (deviceId) {
+        console.log('ID d\'appareil existant trouvé:', deviceId);
+        return deviceId;
       }
+      
+      // Si aucun ID n'existe, générer un nouvel ID unique et persistant
+      try {
+        // Utiliser l'ID d'installation Expo s'il est disponible
+        const installationId = Constants.installationId || 'unknown';
+        
+        // Créer un ID unique mais simple
+        const randomPart = Math.random().toString(36).substr(2, 9);
+        
+        // Format simple et prévisible
+        deviceId = `device_${randomPart}_${installationId.substr(-8)}`;
+      } catch (error) {
+        console.warn('Erreur lors de la génération de l\'ID avec Expo:', error);
+        // Fallback: générer un ID basé sur le timestamp et random
+        const randomPart = Math.random().toString(36).substr(2, 9);
+        deviceId = `device_${randomPart}_wr0yggv66`;
+      }
+      
+      // S'assurer que l'ID n'est pas trop long
+      if (deviceId.length > 50) {
+        const randomPart = Math.random().toString(36).substr(2, 9);
+        deviceId = `device_${randomPart}_wr0yggv66`;
+      }
+      
+      // Stocker l'ID de façon permanente
+      await AsyncStorage.setItem(DEVICE_ID_KEY, deviceId);
+      console.log('Nouvel ID généré et stocké:', deviceId);
       
       return deviceId;
     } catch (error) {
       console.error('Error getting/creating device ID:', error);
-      // Fallback final: générer un ID simple et fiable
-      const fallbackId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Fallback final: utiliser un ID fixe pour ce développement
+      const fallbackId = 'device_mgnuaf8p_wr0yggv66';
       try {
         await AsyncStorage.setItem(DEVICE_ID_KEY, fallbackId);
+        console.log('Utilisation de l\'ID de fallback:', fallbackId);
       } catch (storageError) {
         console.error('Erreur lors du stockage de l\'ID de fallback:', storageError);
       }
       return fallbackId;
+    }
+  }
+
+  // Méthode pour forcer un deviceId spécifique (utile pour le développement)
+  async setDeviceId(deviceId) {
+    try {
+      await AsyncStorage.setItem(DEVICE_ID_KEY, deviceId);
+      this.deviceId = deviceId;
+      console.log('DeviceId forcé à:', deviceId);
+      return deviceId;
+    } catch (error) {
+      console.error('Erreur lors de la définition du deviceId:', error);
+      throw error;
     }
   }
 

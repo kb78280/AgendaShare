@@ -1,5 +1,5 @@
-import React, { useLayoutEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList } from 'react-native';
+import React, { useLayoutEffect, useState, useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format, startOfYear, endOfYear, eachMonthOfInterval, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -7,35 +7,44 @@ import { fr } from 'date-fns/locale';
 export default function AnneeScreen({ navigation }) {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
+  // Mémoriser la date d'aujourd'hui pour éviter les recalculs
+  const today = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
+  const todayForHeader = useMemo(() => format(new Date(), 'EEE d MMM', { locale: fr }), []);
+
   useLayoutEffect(() => {
-    const dateString = format(new Date(), 'EEE d MMM', { locale: fr });
-    
     navigation.setOptions({
-      headerLeft: () => (
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => navigation.openDrawer()}
-        >
-          <Ionicons name="menu" size={24} color="#fff" />
-        </TouchableOpacity>
-      ),
       headerRight: () => (
         <View style={styles.headerRight}>
-          <Text style={styles.dateText}>{dateString}</Text>
+          <Text style={styles.dateText}>{todayForHeader}</Text>
           <TouchableOpacity style={styles.headerButton}>
             <Ionicons name="search" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
       ),
-      headerTitle: '',
+      headerTitle: 'Agenda',
     });
-  }, [navigation, currentYear]);
+  }, [navigation, todayForHeader]);
 
-  const yearStart = startOfYear(new Date(currentYear, 0, 1));
-  const yearEnd = endOfYear(new Date(currentYear, 0, 1));
-  const months = eachMonthOfInterval({ start: yearStart, end: yearEnd });
+  // Mémoriser les mois de l'année pour éviter les recalculs
+  const months = useMemo(() => {
+    const yearStart = startOfYear(new Date(currentYear, 0, 1));
+    const yearEnd = endOfYear(new Date(currentYear, 0, 1));
+    return eachMonthOfInterval({ start: yearStart, end: yearEnd });
+  }, [currentYear]);
 
-  const renderMiniCalendar = (month) => {
+  // Mémoriser les en-têtes des jours
+  const dayHeaders = useMemo(() => ['D', 'L', 'M', 'M', 'J', 'V', 'S'], []);
+
+  const handleMonthPress = useCallback((month) => {
+    const year = month.getFullYear();
+    const monthIndex = month.getMonth();
+    navigation.navigate('Mois', { 
+      initialYear: year, 
+      initialMonth: monthIndex 
+    });
+  }, [navigation]);
+
+  const renderMiniCalendar = useCallback((month) => {
     const monthStart = startOfMonth(month);
     const monthEnd = endOfMonth(month);
     const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
@@ -46,57 +55,77 @@ export default function AnneeScreen({ navigation }) {
     const allDays = [...emptyDays, ...days];
 
     return (
-      <View key={month.getTime()} style={styles.miniCalendar}>
+      <TouchableOpacity
+        key={month.getTime()} 
+        style={styles.miniCalendar}
+        onPress={() => handleMonthPress(month)}
+        activeOpacity={0.7}
+      >
         <Text style={styles.monthTitle}>
           {format(month, 'MMMM', { locale: fr })}
         </Text>
         <View style={styles.daysHeader}>
-          {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, index) => (
+          {dayHeaders.map((day, index) => (
             <Text key={index} style={styles.dayHeader}>{day}</Text>
           ))}
         </View>
         <View style={styles.daysGrid}>
           {allDays.map((day, index) => (
-            <TouchableOpacity
+            <View
               key={index}
               style={[
                 styles.dayCell,
-                day && format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') && styles.todayCell
+                day && format(day, 'yyyy-MM-dd') === today && styles.todayCell
               ]}
-              onPress={() => day && navigation.navigate('Mois')}
             >
               <Text style={[
                 styles.dayText,
-                day && format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') && styles.todayText
+                day && format(day, 'yyyy-MM-dd') === today && styles.todayText
               ]}>
                 {day ? format(day, 'd') : ''}
               </Text>
-            </TouchableOpacity>
+            </View>
           ))}
         </View>
-      </View>
+      </TouchableOpacity>
     );
-  };
+  }, [today, dayHeaders, handleMonthPress]);
+
+  const handlePreviousYear = useCallback(() => {
+    setCurrentYear(prev => prev - 1);
+  }, []);
+
+  const handleNextYear = useCallback(() => {
+    setCurrentYear(prev => prev + 1);
+  }, []);
 
   return (
     <View style={styles.container}>
       <View style={styles.yearHeader}>
         <TouchableOpacity 
-          onPress={() => setCurrentYear(currentYear - 1)}
+          onPress={handlePreviousYear}
           style={styles.yearButton}
+          activeOpacity={0.7}
         >
           <Ionicons name="chevron-back" size={24} color="#2196F3" />
         </TouchableOpacity>
         <Text style={styles.yearTitle}>{currentYear}</Text>
         <TouchableOpacity 
-          onPress={() => setCurrentYear(currentYear + 1)}
+          onPress={handleNextYear}
           style={styles.yearButton}
+          activeOpacity={0.7}
         >
           <Ionicons name="chevron-forward" size={24} color="#2196F3" />
         </TouchableOpacity>
       </View>
       
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={6}
+        windowSize={10}
+      >
         <View style={styles.calendarsGrid}>
           {months.map(renderMiniCalendar)}
         </View>

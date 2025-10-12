@@ -34,14 +34,43 @@ LocaleConfig.locales['fr'] = {
 };
 LocaleConfig.defaultLocale = 'fr';
 
-export default function MoisScreen({ navigation }) {
+export default function MoisScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [currentMonth, setCurrentMonth] = useState(format(new Date(), 'yyyy-MM-01'));
+  
+  // Vérifier s'il y a des paramètres de navigation
+  const { initialYear, initialMonth } = route?.params || {};
+  
+  // Initialiser les dates avec les paramètres si disponibles
+  const initializeDate = () => {
+    if (initialYear !== undefined && initialMonth !== undefined) {
+      const targetDate = new Date(initialYear, initialMonth, 1);
+      return {
+        selectedDate: format(targetDate, 'yyyy-MM-dd'),
+        currentMonth: format(targetDate, 'yyyy-MM-01')
+      };
+    }
+    return {
+      selectedDate: format(new Date(), 'yyyy-MM-dd'),
+      currentMonth: format(new Date(), 'yyyy-MM-01')
+    };
+  };
+
+  const { selectedDate: initialSelectedDate, currentMonth: initialCurrentMonth } = initializeDate();
+  
+  const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
+  const [currentMonth, setCurrentMonth] = useState(initialCurrentMonth);
   const [events, setEvents] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
+
+  // Réinitialiser les paramètres de navigation après utilisation
+  useEffect(() => {
+    if (initialYear !== undefined && initialMonth !== undefined) {
+      // Nettoyer les paramètres pour éviter qu'ils persistent
+      navigation.setParams({ initialYear: undefined, initialMonth: undefined });
+    }
+  }, [initialYear, initialMonth, navigation]);
 
   // Écouter les changements d'événements
   useEffect(() => {
@@ -309,76 +338,117 @@ export default function MoisScreen({ navigation }) {
       <View style={styles.divider} />
 
       <View style={styles.daySection}>
-        <Text style={styles.daySectionTitle}>
-          {DateUtils.formatDateLong(selectedDate)}
-        </Text>
+        <View style={styles.daySectionHeader}>
+          <Text style={styles.daySectionTitle}>
+            {DateUtils.formatDateLong(selectedDate)}
+          </Text>
+          {eventsOfSelectedDate.length > 0 && (
+            <View style={styles.eventCountBadge}>
+              <Text style={styles.eventCountText}>
+                {eventsOfSelectedDate.length} événement{eventsOfSelectedDate.length > 1 ? 's' : ''}
+              </Text>
+            </View>
+          )}
+        </View>
         
-        <ScrollView style={styles.eventsList}>
+        <View style={styles.eventsContainer}>
           {eventsOfSelectedDate.length === 0 ? (
-            <Text style={styles.noEventsText}>Aucun événement pour ce jour</Text>
+            <View style={styles.noEventsContainer}>
+              <Ionicons name="calendar-outline" size={48} color="#ccc" />
+              <Text style={styles.noEventsText}>Aucun événement pour ce jour</Text>
+              <Text style={styles.noEventsSubtext}>Appuyez sur le bouton ci-dessous pour en créer un</Text>
+            </View>
           ) : (
-            eventsOfSelectedDate.map((event) => (
-              <TouchableOpacity 
-                key={event.id} 
-                style={[
-                  styles.eventItem,
-                  event.visibility === 'private' && styles.privateEventItem
-                ]}
-                onPress={() => handleEditEvent(event)}
-              >
-                <View style={styles.eventContent}>
-                  <View style={styles.eventHeader}>
-                    <Text style={styles.eventTitle}>{event.title}</Text>
-                    <View style={styles.eventMeta}>
-                      <Ionicons 
-                        name={event.visibility === 'private' ? 'lock-closed' : 'people'} 
-                        size={12} 
-                        color={event.visibility === 'private' ? '#ff9800' : '#2196F3'} 
-                      />
-                      {event.notifications && event.notifications.length > 0 && (
-                        <Ionicons name="notifications" size={12} color="#666" style={{ marginLeft: 4 }} />
+            <ScrollView 
+              style={styles.eventsList}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.eventsListContent}
+            >
+              {eventsOfSelectedDate.map((event, index) => (
+                <TouchableOpacity 
+                  key={event.id} 
+                  style={[
+                    styles.eventItem,
+                    event.visibility === 'private' && styles.privateEventItem,
+                    index === 0 && styles.firstEventItem,
+                    index === eventsOfSelectedDate.length - 1 && styles.lastEventItem
+                  ]}
+                  onPress={() => handleEditEvent(event)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.eventIndicator} />
+                  <View style={styles.eventContent}>
+                    <View style={styles.eventHeader}>
+                      <Text style={styles.eventTitle} numberOfLines={2}>
+                        {event.title}
+                      </Text>
+                      <View style={styles.eventMeta}>
+                        <Ionicons 
+                          name={event.visibility === 'private' ? 'lock-closed' : 'people'} 
+                          size={14} 
+                          color={event.visibility === 'private' ? '#ff9800' : '#2196F3'} 
+                        />
+                        {event.notifications && event.notifications.length > 0 && (
+                          <Ionicons name="notifications" size={14} color="#666" style={{ marginLeft: 6 }} />
+                        )}
+                      </View>
+                    </View>
+                    
+                    <View style={styles.eventDetails}>
+                      {event.type === 'date_range' && (
+                        <View style={styles.eventDetailRow}>
+                          <Ionicons name="calendar" size={14} color="#2196F3" />
+                          <Text style={styles.eventDates}>
+                            Du {DateUtils.formatDate(event.startDate)} au {DateUtils.formatDate(event.endDate)}
+                          </Text>
+                        </View>
+                      )}
+                      
+                      {!event.isAllDay && event.startTime && (
+                        <View style={styles.eventDetailRow}>
+                          <Ionicons name="time" size={14} color="#666" />
+                          <Text style={styles.eventTime}>
+                            {event.startTime}{event.endTime ? ` - ${event.endTime}` : ''}
+                            {event.endTime && event.type === 'single_day' && (
+                              <Text style={styles.eventDuration}>
+                                {' '}({DateUtils.formatDuration(DateUtils.calculateDurationInMinutes(event.startTime, event.endTime))})
+                              </Text>
+                            )}
+                          </Text>
+                        </View>
+                      )}
+                      
+                      {event.isAllDay && (
+                        <View style={styles.eventDetailRow}>
+                          <Ionicons name="sunny" size={14} color="#ff9800" />
+                          <Text style={styles.eventTime}>Journée entière</Text>
+                        </View>
                       )}
                     </View>
                   </View>
                   
-                  {event.type === 'date_range' && (
-                    <Text style={styles.eventDates}>
-                      Du {DateUtils.formatDate(event.startDate)} au {DateUtils.formatDate(event.endDate)}
-                    </Text>
-                  )}
-                  
-                  {!event.isAllDay && event.startTime && (
-                    <Text style={styles.eventTime}>
-                      {event.startTime}{event.endTime ? ` - ${event.endTime}` : ''}
-                      {event.endTime && event.type === 'single_day' && (
-                        <Text style={styles.eventDuration}>
-                          {' '}({DateUtils.formatDuration(DateUtils.calculateDurationInMinutes(event.startTime, event.endTime))})
-                        </Text>
-                      )}
-                    </Text>
-                  )}
-                  
-                  {event.isAllDay && (
-                    <Text style={styles.eventTime}>Journée entière</Text>
-                  )}
-                </View>
-                
-                <View style={styles.eventActions}>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteEvent(event.id)}
-                    style={styles.deleteButton}
-                  >
-                    <Ionicons name="trash-outline" size={20} color="#ff4444" />
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            ))
+                  <View style={styles.eventActions}>
+                    <TouchableOpacity
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleDeleteEvent(event.id);
+                      }}
+                      style={styles.deleteButton}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#ff4444" />
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           )}
-        </ScrollView>
+        </View>
 
         <TouchableOpacity 
           style={[styles.addButton, { marginBottom: insets.bottom + 16 }]} 
           onPress={openEventModal}
+          activeOpacity={0.8}
         >
           <Ionicons name="add" size={24} color="#fff" />
           <Text style={styles.addButtonText}>Ajouter un événement</Text>
@@ -471,14 +541,140 @@ const styles = StyleSheet.create({
   },
   daySection: {
     flex: 1,
-    padding: 16,
+    backgroundColor: '#fff',
+  },
+  daySectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#f8f9fa',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
   daySectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#2d4150',
-    marginBottom: 16,
+    flex: 1,
+  },
+  eventCountBadge: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  eventCountText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  eventsContainer: {
+    flex: 1,
+  },
+  noEventsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  noEventsText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 16,
     textAlign: 'center',
+  },
+  noEventsSubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  eventsList: {
+    flex: 1,
+  },
+  eventsListContent: {
+    padding: 16,
+  },
+  eventItem: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    marginBottom: 12,
+    borderRadius: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  firstEventItem: {
+    marginTop: 4,
+  },
+  lastEventItem: {
+    marginBottom: 4,
+  },
+  privateEventItem: {
+    backgroundColor: '#fff8f0',
+    borderColor: '#ffe0b3',
+  },
+  eventIndicator: {
+    width: 4,
+    backgroundColor: '#2196F3',
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
+  },
+  eventContent: {
+    flex: 1,
+    padding: 16,
+  },
+  eventHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  eventTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2d4150',
+    flex: 1,
+    marginRight: 12,
+    lineHeight: 22,
+  },
+  eventMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  eventDetails: {
+    gap: 6,
+  },
+  eventDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  eventDates: {
+    fontSize: 13,
+    color: '#2196F3',
+    fontWeight: '500',
+    flex: 1,
+  },
+  eventTime: {
+    fontSize: 14,
+    color: '#666',
+    flex: 1,
+  },
+  eventDuration: {
+    color: '#999',
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  eventActions: {
+    justifyContent: 'center',
+    paddingRight: 16,
   },
   rappelsList: {
     flex: 1,
@@ -587,9 +783,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#2196F3',
-    padding: 16,
-    borderRadius: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    marginHorizontal: 16,
     marginTop: 16,
+    borderRadius: 12,
+    elevation: 4,
+    shadowColor: '#2196F3',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
   },
   addButtonText: {
     color: '#fff',

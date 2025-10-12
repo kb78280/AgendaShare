@@ -1,24 +1,19 @@
-import React, { useLayoutEffect, useState } from 'react';
+import React, { useLayoutEffect, useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks } from 'date-fns';
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, parseISO, isWithinInterval } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import eventService from '../services/eventService';
+import DateUtils from '../utils/dateUtils';
 
 export default function SemaineScreen({ navigation }) {
   const [currentWeek, setCurrentWeek] = useState(new Date());
+  const [events, setEvents] = useState([]);
 
   useLayoutEffect(() => {
     const dateString = format(new Date(), 'EEE d MMM', { locale: fr });
     
     navigation.setOptions({
-      headerLeft: () => (
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => navigation.openDrawer()}
-        >
-          <Ionicons name="menu" size={24} color="#fff" />
-        </TouchableOpacity>
-      ),
       headerRight: () => (
         <View style={styles.headerRight}>
           <Text style={styles.dateText}>{dateString}</Text>
@@ -27,13 +22,68 @@ export default function SemaineScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       ),
-      headerTitle: '',
+      headerTitle: 'Semaine',
     });
   }, [navigation]);
+
+  // Écouter les changements d'événements
+  useEffect(() => {
+    const unsubscribe = eventService.addListener((newEvents) => {
+      setEvents(newEvents);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 }); // Lundi = 1
   const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 1 });
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
+
+  // Filtrer les événements de la semaine
+  const weekEvents = useMemo(() => {
+    return events.filter(event => {
+      const eventStart = parseISO(event.startDate);
+      const eventEnd = event.endDate ? parseISO(event.endDate) : eventStart;
+      
+      return isWithinInterval(eventStart, { start: weekStart, end: weekEnd }) ||
+             isWithinInterval(eventEnd, { start: weekStart, end: weekEnd }) ||
+             (eventStart <= weekStart && eventEnd >= weekEnd);
+    });
+  }, [events, weekStart, weekEnd]);
+
+  // Organiser les événements par jour et par heure
+  const organizeEventsByDayAndHour = useMemo(() => {
+    const organized = {};
+    
+    weekDays.forEach(day => {
+      const dayKey = format(day, 'yyyy-MM-dd');
+      organized[dayKey] = {};
+      
+      // Initialiser chaque heure
+      for (let hour = 0; hour < 24; hour++) {
+        organized[dayKey][hour] = [];
+      }
+    });
+
+    weekEvents.forEach(event => {
+      const eventDate = parseISO(event.startDate);
+      const dayKey = format(eventDate, 'yyyy-MM-dd');
+      
+      if (organized[dayKey]) {
+        if (event.isAllDay) {
+          // Événement toute la journée - l'ajouter à 8h par défaut
+          organized[dayKey][8].push(event);
+        } else if (event.startTime) {
+          const hour = parseInt(event.startTime.split(':')[0]);
+          if (hour >= 0 && hour < 24) {
+            organized[dayKey][hour].push(event);
+          }
+        }
+      }
+    });
+
+    return organized;
+  }, [weekEvents, weekDays]);
 
   const goToPreviousWeek = () => {
     setCurrentWeek(subWeeks(currentWeek, 1));
@@ -46,6 +96,22 @@ export default function SemaineScreen({ navigation }) {
   const isToday = (date) => {
     return format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
   };
+
+  const renderEventInCell = (event) => (
+    <View key={event.id} style={[
+      styles.eventBlock,
+      event.visibility === 'private' && styles.privateEventBlock
+    ]}>
+      <Text style={styles.eventTitle} numberOfLines={1}>
+        {event.title}
+      </Text>
+      {!event.isAllDay && event.startTime && (
+        <Text style={styles.eventTime}>
+          {event.startTime}
+        </Text>
+      )}
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -81,14 +147,19 @@ export default function SemaineScreen({ navigation }) {
           <View key={hour} style={styles.timeSlot}>
             <Text style={styles.timeText}>{hour.toString().padStart(2, '0')}:00</Text>
             <View style={styles.hourRow}>
-              {weekDays.map((day, dayIndex) => (
-                <TouchableOpacity
-                  key={dayIndex}
-                  style={[styles.hourCell, isToday(day) && styles.todayCell]}
-                >
-                  {/* Ici on pourrait ajouter les événements */}
-                </TouchableOpacity>
-              ))}
+              {weekDays.map((day, dayIndex) => {
+                const dayKey = format(day, 'yyyy-MM-dd');
+                const dayEvents = organizeEventsByDayAndHour[dayKey]?.[hour] || [];
+                
+                return (
+                  <View
+                    key={dayIndex}
+                    style={[styles.hourCell, isToday(day) && styles.todayCell]}
+                  >
+                    {dayEvents.map(renderEventInCell)}
+                  </View>
+                );
+              })}
             </View>
           </View>
         ))}
@@ -195,5 +266,25 @@ const styles = StyleSheet.create({
   },
   todayCell: {
     backgroundColor: '#f8f9ff',
+  },
+  eventBlock: {
+    backgroundColor: '#2196F3',
+    borderRadius: 4,
+    padding: 2,
+    marginBottom: 2,
+    minHeight: 20,
+  },
+  privateEventBlock: {
+    backgroundColor: '#ff9800',
+  },
+  eventTitle: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  eventTime: {
+    color: '#fff',
+    fontSize: 8,
+    opacity: 0.9,
   },
 });
