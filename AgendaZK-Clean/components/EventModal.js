@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import DateUtils from '../utils/dateUtils';
@@ -53,9 +54,14 @@ export default function EventModal({
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
-  // États pour les sélecteurs de date
+  // États pour les sélecteurs de date et heure
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+
+  // État temporaire pour le date picker
+  const [tempDate, setTempDate] = useState(new Date());
 
   // États pour les notifications personnalisées
   const [showCustomNotification, setShowCustomNotification] = useState(false);
@@ -63,37 +69,51 @@ export default function EventModal({
   const [customNotificationUnit, setCustomNotificationUnit] = useState('minutes');
 
   // Fonctions pour la gestion des dates
-  const handleStartDateChange = (newDate) => {
-    setStartDate(newDate);
-    // Si la date de fin est antérieure à la nouvelle date de début, l'ajuster
-    if (endDate && endDate < newDate) {
-      setEndDate(newDate);
+  const openDatePicker = (date, callback) => {
+    setTempDate(new Date(date));
+    callback(true);
+  };
+  
+  const handleDateChange = (event, selectedDate, callback) => {
+    if (Platform.OS === 'android') {
+      callback(false);
+    }
+    if (selectedDate) {
+      setTempDate(selectedDate);
+    }
+  };
+  
+  const confirmDateChange = (setDate, setShowPicker) => {
+    setDate(DateUtils.toISODateString(tempDate));
+    setShowPicker(false);
+  };
+
+  const handleStartDateConfirm = () => {
+    const newStartDate = DateUtils.toISODateString(tempDate);
+    setStartDate(newStartDate);
+    if (endDate && endDate < newStartDate) {
+      setEndDate(newStartDate);
     }
     setShowStartDatePicker(false);
   };
 
-  const handleEndDateChange = (newDate) => {
-    setEndDate(newDate);
+  const handleEndDateConfirm = () => {
+    setEndDate(DateUtils.toISODateString(tempDate));
     setShowEndDatePicker(false);
   };
 
-  const adjustDate = (dateString, days) => {
-    const date = new Date(dateString);
-    date.setDate(date.getDate() + days);
-    return DateUtils.toISODateString(date);
-  };
-
-  const formatDateForPicker = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return DateUtils.formatDate(date, 'dd/MM/yyyy');
+  // Fonctions pour la gestion des heures
+  const onTimeChange = (event, selectedTime, setTime, setShowPicker) => {
+    setShowPicker(false);
+    if (selectedTime) {
+      setTime(format(selectedTime, 'HH:mm'));
+    }
   };
 
   // Initialiser les données quand le modal s'ouvre
   useEffect(() => {
     if (visible) {
-      if (event) {
-        // Mode édition
+      if (event && event.id) { // Mode édition
         setTitle(event.title || '');
         setEventType(event.type || 'single_day');
         setStartDate(event.startDate || selectedDate);
@@ -103,10 +123,12 @@ export default function EventModal({
         setEndTime(event.endTime || '');
         setVisibility(event.visibility || 'public');
         setNotifications(event.notifications || []);
-      } else {
-        // Mode création
+      } else { // Mode création
         resetForm();
         setStartDate(selectedDate);
+        if (event && event.startTime) {
+          setStartTime(event.startTime);
+        }
       }
       setErrors({});
     }
@@ -346,102 +368,30 @@ export default function EventModal({
             <View style={styles.dateRow}>
               <View style={styles.dateInput}>
                 <Text style={styles.dateLabel}>Début</Text>
-                {showStartDatePicker ? (
-                  <View style={styles.datePickerContainer}>
-                    <View style={styles.datePickerHeader}>
-                      <TouchableOpacity
-                        onPress={() => handleStartDateChange(adjustDate(startDate || selectedDate, -1))}
-                        style={styles.dateAdjustButton}
-                      >
-                        <Ionicons name="chevron-back" size={20} color="#2196F3" />
-                      </TouchableOpacity>
-                      <Text style={styles.datePickerText}>
-                        {formatDateForPicker(startDate || selectedDate)}
-                      </Text>
-                      <TouchableOpacity
-                        onPress={() => handleStartDateChange(adjustDate(startDate || selectedDate, 1))}
-                        style={styles.dateAdjustButton}
-                      >
-                        <Ionicons name="chevron-forward" size={20} color="#2196F3" />
-                      </TouchableOpacity>
-                    </View>
-                    <View style={styles.datePickerActions}>
-                      <TouchableOpacity
-                        onPress={() => setShowStartDatePicker(false)}
-                        style={styles.datePickerCancelButton}
-                      >
-                        <Text style={styles.datePickerCancelText}>Annuler</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleStartDateChange(startDate || selectedDate)}
-                        style={styles.datePickerConfirmButton}
-                      >
-                        <Text style={styles.datePickerConfirmText}>OK</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : (
-                  <TouchableOpacity 
-                    style={[styles.dateButton, errors.startDate && styles.inputError]}
-                    onPress={() => setShowStartDatePicker(true)}
-                  >
-                    <Text style={styles.dateButtonText}>
-                      {startDate ? DateUtils.formatDate(startDate) : 'Sélectionner'}
-                    </Text>
-                    <Ionicons name="calendar-outline" size={20} color="#666" />
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity 
+                  style={[styles.dateButton, errors.startDate && styles.inputError]}
+                  onPress={() => openDatePicker(startDate || selectedDate, setShowStartDatePicker)}
+                >
+                  <Text style={styles.dateButtonText}>
+                    {startDate ? DateUtils.formatDate(startDate) : 'Sélectionner'}
+                  </Text>
+                  <Ionicons name="calendar-outline" size={20} color="#666" />
+                </TouchableOpacity>
                 {errors.startDate && <Text style={styles.errorText}>{errors.startDate}</Text>}
               </View>
               
               {eventType === 'date_range' && (
                 <View style={styles.dateInput}>
                   <Text style={styles.dateLabel}>Fin</Text>
-                  {showEndDatePicker ? (
-                    <View style={styles.datePickerContainer}>
-                      <View style={styles.datePickerHeader}>
-                        <TouchableOpacity
-                          onPress={() => handleEndDateChange(adjustDate(endDate || startDate || selectedDate, -1))}
-                          style={styles.dateAdjustButton}
-                        >
-                          <Ionicons name="chevron-back" size={20} color="#2196F3" />
-                        </TouchableOpacity>
-                        <Text style={styles.datePickerText}>
-                          {formatDateForPicker(endDate || startDate || selectedDate)}
-                        </Text>
-                        <TouchableOpacity
-                          onPress={() => handleEndDateChange(adjustDate(endDate || startDate || selectedDate, 1))}
-                          style={styles.dateAdjustButton}
-                        >
-                          <Ionicons name="chevron-forward" size={20} color="#2196F3" />
-                        </TouchableOpacity>
-                      </View>
-                      <View style={styles.datePickerActions}>
-                        <TouchableOpacity
-                          onPress={() => setShowEndDatePicker(false)}
-                          style={styles.datePickerCancelButton}
-                        >
-                          <Text style={styles.datePickerCancelText}>Annuler</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => handleEndDateChange(endDate || startDate || selectedDate)}
-                          style={styles.datePickerConfirmButton}
-                        >
-                          <Text style={styles.datePickerConfirmText}>OK</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  ) : (
-                    <TouchableOpacity 
-                      style={[styles.dateButton, errors.endDate && styles.inputError]}
-                      onPress={() => setShowEndDatePicker(true)}
-                    >
-                      <Text style={styles.dateButtonText}>
-                        {endDate ? DateUtils.formatDate(endDate) : 'Sélectionner'}
-                      </Text>
-                      <Ionicons name="calendar-outline" size={20} color="#666" />
-                    </TouchableOpacity>
-                  )}
+                  <TouchableOpacity 
+                    style={[styles.dateButton, errors.endDate && styles.inputError]}
+                    onPress={() => openDatePicker(endDate || startDate || selectedDate, setShowEndDatePicker)}
+                  >
+                    <Text style={styles.dateButtonText}>
+                      {endDate ? DateUtils.formatDate(endDate) : 'Sélectionner'}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={20} color="#666" />
+                  </TouchableOpacity>
                   {errors.endDate && <Text style={styles.errorText}>{errors.endDate}</Text>}
                 </View>
               )}
@@ -473,28 +423,24 @@ export default function EventModal({
               <View style={styles.timeRow}>
                 <View style={styles.timeInput}>
                   <Text style={styles.timeLabel}>Début</Text>
-                  <TextInput
-                    style={[styles.timeTextInput, errors.startTime && styles.inputError]}
-                    placeholder="HH:mm"
-                    value={startTime}
-                    onChangeText={setStartTime}
-                    keyboardType="numeric"
-                    maxLength={5}
-                  />
+                  <TouchableOpacity 
+                    style={[styles.timeButton, errors.startTime && styles.inputError]}
+                    onPress={() => setShowStartTimePicker(true)}
+                  >
+                    <Text style={styles.timeButtonText}>{startTime || 'HH:mm'}</Text>
+                  </TouchableOpacity>
                   {errors.startTime && <Text style={styles.errorText}>{errors.startTime}</Text>}
                 </View>
                 
                 {eventType === 'single_day' && (
                   <View style={styles.timeInput}>
                     <Text style={styles.timeLabel}>Fin (optionnel)</Text>
-                    <TextInput
-                      style={[styles.timeTextInput, errors.endTime && styles.inputError]}
-                      placeholder="HH:mm"
-                      value={endTime}
-                      onChangeText={setEndTime}
-                      keyboardType="numeric"
-                      maxLength={5}
-                    />
+                    <TouchableOpacity 
+                      style={[styles.timeButton, errors.endTime && styles.inputError]}
+                      onPress={() => setShowEndTimePicker(true)}
+                    >
+                      <Text style={styles.timeButtonText}>{endTime || 'HH:mm'}</Text>
+                    </TouchableOpacity>
                     {errors.endTime && <Text style={styles.errorText}>{errors.endTime}</Text>}
                   </View>
                 )}
@@ -558,6 +504,91 @@ export default function EventModal({
             </Text>
           </View>
         </ScrollView>
+
+        {/* --- Pickers --- */}
+        {showStartDatePicker && (
+          Platform.OS === 'ios' ? (
+            <View style={styles.pickerModalContainer}>
+              <View style={styles.pickerModal}>
+                <DateTimePicker
+                  value={tempDate}
+                  mode="date"
+                  display="inline"
+                  onChange={(e, d) => handleDateChange(e, d, setShowStartDatePicker)}
+                  locale="fr-FR"
+                />
+                <View style={styles.pickerActions}>
+                  <TouchableOpacity onPress={() => setShowStartDatePicker(false)} style={styles.pickerButton}>
+                    <Text style={styles.pickerButtonText}>Annuler</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleStartDateConfirm} style={[styles.pickerButton, styles.pickerButtonConfirm]}>
+                    <Text style={[styles.pickerButtonText, styles.pickerButtonConfirmText]}>Confirmer</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <DateTimePicker
+              value={new Date(startDate || selectedDate)}
+              mode="date"
+              display="default"
+              onChange={(e, d) => { setShowStartDatePicker(false); if (d) { setStartDate(DateUtils.toISODateString(d)); if (endDate && endDate < DateUtils.toISODateString(d)) setEndDate(DateUtils.toISODateString(d)); } }}
+              locale="fr-FR"
+            />
+          )
+        )}
+        
+        {showEndDatePicker && (
+           Platform.OS === 'ios' ? (
+            <View style={styles.pickerModalContainer}>
+              <View style={styles.pickerModal}>
+                <DateTimePicker
+                  value={tempDate}
+                  mode="date"
+                  display="inline"
+                  onChange={(e, d) => handleDateChange(e, d, setShowEndDatePicker)}
+                  locale="fr-FR"
+                />
+                <View style={styles.pickerActions}>
+                  <TouchableOpacity onPress={() => setShowEndDatePicker(false)} style={styles.pickerButton}>
+                    <Text style={styles.pickerButtonText}>Annuler</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleEndDateConfirm} style={[styles.pickerButton, styles.pickerButtonConfirm]}>
+                    <Text style={[styles.pickerButtonText, styles.pickerButtonConfirmText]}>Confirmer</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <DateTimePicker
+              value={new Date(endDate || startDate || selectedDate)}
+              mode="date"
+              display="default"
+              onChange={(e, d) => { setShowEndDatePicker(false); if (d) setEndDate(DateUtils.toISODateString(d)); }}
+              locale="fr-FR"
+            />
+          )
+        )}
+
+        {showStartTimePicker && (
+          <DateTimePicker
+            value={startTime ? new Date(`1970-01-01T${startTime}`) : new Date()}
+            mode="time"
+            display="default"
+            onChange={(e, t) => onTimeChange(e, t, setStartTime, setShowStartTimePicker)}
+            locale="fr-FR"
+          />
+        )}
+
+        {showEndTimePicker && (
+          <DateTimePicker
+            value={endTime ? new Date(`1970-01-01T${endTime}`) : new Date()}
+            mode="time"
+            display="default"
+            onChange={(e, t) => onTimeChange(e, t, setEndTime, setShowEndTimePicker)}
+            locale="fr-FR"
+          />
+        )}
       </View>
     </Modal>
   );
@@ -672,6 +703,19 @@ const styles = StyleSheet.create({
     borderColor: '#e0e0e0',
   },
   dateButtonText: {
+    fontSize: 16,
+    color: '#2d4150',
+  },
+  timeButton: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeButtonText: {
     fontSize: 16,
     color: '#2d4150',
   },
@@ -921,6 +965,47 @@ const styles = StyleSheet.create({
   addCustomButtonText: {
     color: '#fff',
     fontSize: 14,
+    fontWeight: 'bold',
+  },
+  pickerModalContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  pickerModal: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    width: '90%',
+    elevation: 5,
+  },
+  pickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 16,
+    gap: 12,
+  },
+  pickerButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  pickerButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  pickerButtonConfirm: {
+    backgroundColor: '#2196F3',
+  },
+  pickerButtonConfirmText: {
+    color: '#fff',
     fontWeight: 'bold',
   },
 });

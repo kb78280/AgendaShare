@@ -1,14 +1,20 @@
-import React, { useLayoutEffect, useState, useEffect, useMemo } from 'react';
+import React, { useLayoutEffect, useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, parseISO, isWithinInterval } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import eventService from '../services/eventService';
+import EventModal from '../components/EventModal'; // Importer le modal
 import DateUtils from '../utils/dateUtils';
+
+const HOUR_CELL_HEIGHT = 60; // Hauteur de cellule pour le scroll
 
 export default function SemaineScreen({ navigation }) {
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [events, setEvents] = useState([]);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [selectedEventData, setSelectedEventData] = useState(null);
+  const scrollViewRef = useRef(null);
 
   useLayoutEffect(() => {
     const dateString = format(new Date(), 'EEE d MMM', { locale: fr });
@@ -33,6 +39,14 @@ export default function SemaineScreen({ navigation }) {
     });
 
     return () => unsubscribe();
+  }, []);
+
+  // Scroll automatique à 9h du matin
+  useEffect(() => {
+    scrollViewRef.current?.scrollTo({
+      y: HOUR_CELL_HEIGHT * 9,
+      animated: true,
+    });
   }, []);
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 }); // Lundi = 1
@@ -97,6 +111,17 @@ export default function SemaineScreen({ navigation }) {
     return format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
   };
 
+  const handleCellPress = (day, hour) => {
+    const selectedDate = format(day, 'yyyy-MM-dd');
+    const startTime = `${String(hour).padStart(2, '0')}:00`;
+    
+    setSelectedEventData({
+      date: selectedDate,
+      startTime: startTime,
+    });
+    setShowEventModal(true);
+  };
+
   const renderEventInCell = (event) => (
     <View key={event.id} style={[
       styles.eventBlock,
@@ -142,7 +167,7 @@ export default function SemaineScreen({ navigation }) {
         ))}
       </View>
 
-      <ScrollView style={styles.timeSlots}>
+      <ScrollView ref={scrollViewRef} style={styles.timeSlots}>
         {Array.from({ length: 24 }, (_, hour) => (
           <View key={hour} style={styles.timeSlot}>
             <Text style={styles.timeText}>{hour.toString().padStart(2, '0')}:00</Text>
@@ -152,18 +177,30 @@ export default function SemaineScreen({ navigation }) {
                 const dayEvents = organizeEventsByDayAndHour[dayKey]?.[hour] || [];
                 
                 return (
-                  <View
+                  <TouchableOpacity
                     key={dayIndex}
                     style={[styles.hourCell, isToday(day) && styles.todayCell]}
+                    onPress={() => handleCellPress(day, hour)}
+                    activeOpacity={0.6}
                   >
                     {dayEvents.map(renderEventInCell)}
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
           </View>
         ))}
       </ScrollView>
+
+      <EventModal
+        visible={showEventModal}
+        onClose={() => {
+          setShowEventModal(false);
+          setSelectedEventData(null);
+        }}
+        selectedDate={selectedEventData?.date}
+        event={selectedEventData} // Passez les données pré-remplies
+      />
     </View>
   );
 }
@@ -242,7 +279,7 @@ const styles = StyleSheet.create({
   },
   timeSlot: {
     flexDirection: 'row',
-    minHeight: 60,
+    minHeight: HOUR_CELL_HEIGHT,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
@@ -262,7 +299,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRightWidth: 1,
     borderRightColor: '#f0f0f0',
-    minHeight: 60,
+    minHeight: HOUR_CELL_HEIGHT,
   },
   todayCell: {
     backgroundColor: '#f8f9ff',

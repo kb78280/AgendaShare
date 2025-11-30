@@ -1,16 +1,22 @@
-import React, { useLayoutEffect, useState, useEffect, useMemo } from 'react';
+import React, { useLayoutEffect, useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format, addDays, subDays, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import eventService from '../services/eventService';
+import EventModal from '../components/EventModal'; // Importer le modal
 import DateUtils from '../utils/dateUtils';
+
+const HOUR_CELL_HEIGHT = 80; // Hauteur de cellule pour le scroll
 
 export default function JourScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [currentDay, setCurrentDay] = useState(new Date());
   const [events, setEvents] = useState([]);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [selectedEventData, setSelectedEventData] = useState(null);
+  const scrollViewRef = useRef(null);
 
   useLayoutEffect(() => {
     const dateString = format(new Date(), 'EEE d MMM', { locale: fr });
@@ -35,6 +41,14 @@ export default function JourScreen({ navigation }) {
     });
 
     return () => unsubscribe();
+  }, []);
+
+  // Scroll automatique à 9h du matin
+  useEffect(() => {
+    scrollViewRef.current?.scrollTo({
+      y: HOUR_CELL_HEIGHT * 9,
+      animated: true,
+    });
   }, []);
 
   // Filtrer les événements du jour
@@ -73,6 +87,26 @@ export default function JourScreen({ navigation }) {
     return organized;
   }, [dayEvents]);
 
+  const handleCellPress = (hour) => {
+    const selectedDate = format(currentDay, 'yyyy-MM-dd');
+    const startTime = `${String(hour).padStart(2, '0')}:00`;
+
+    setSelectedEventData({
+      date: selectedDate,
+      startTime: startTime,
+    });
+    setShowEventModal(true);
+  };
+
+  const openEventModalForToday = () => {
+    const selectedDate = format(currentDay, 'yyyy-MM-dd');
+    setSelectedEventData({
+      date: selectedDate,
+      startTime: DateUtils.getCurrentTime(), // Heure actuelle par défaut
+    });
+    setShowEventModal(true);
+  };
+
   const goToPreviousDay = () => {
     setCurrentDay(subDays(currentDay, 1));
   };
@@ -110,13 +144,18 @@ export default function JourScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.timeSlots} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollViewRef} style={styles.timeSlots} showsVerticalScrollIndicator={false}>
         {Array.from({ length: 24 }, (_, hour) => {
           const timeSlot = `${hour.toString().padStart(2, '0')}:00`;
           const hourEvents = organizeEventsByHour[hour] || [];
           
           return (
-            <View key={hour} style={styles.timeSlot}>
+            <TouchableOpacity 
+              key={hour} 
+              style={styles.timeSlot}
+              onPress={() => handleCellPress(hour)}
+              activeOpacity={0.6}
+            >
               <Text style={styles.timeText}>{timeSlot}</Text>
               <View style={styles.eventArea}>
                 {hourEvents.map(event => (
@@ -150,21 +189,31 @@ export default function JourScreen({ navigation }) {
                 ))}
                 {hourEvents.length === 0 && hour >= 6 && hour <= 22 && (
                   <View style={styles.emptySlot}>
-                    <Text style={styles.emptySlotText}>Libre</Text>
+                    <Text style={styles.emptySlotText}>+</Text>
                   </View>
                 )}
               </View>
-            </View>
+            </TouchableOpacity>
           );
         })}
       </ScrollView>
 
       <TouchableOpacity 
         style={[styles.addButton, { bottom: insets.bottom + 20 }]}
-        onPress={() => navigation.navigate('Mois')}
+        onPress={openEventModalForToday}
       >
         <Ionicons name="add" size={24} color="#fff" />
       </TouchableOpacity>
+
+      <EventModal
+        visible={showEventModal}
+        onClose={() => {
+          setShowEventModal(false);
+          setSelectedEventData(null);
+        }}
+        selectedDate={selectedEventData?.date}
+        event={selectedEventData} // Passez les données pré-remplies
+      />
     </View>
   );
 }
@@ -228,7 +277,7 @@ const styles = StyleSheet.create({
   },
   timeSlot: {
     flexDirection: 'row',
-    minHeight: 80,
+    minHeight: HOUR_CELL_HEIGHT,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },

@@ -64,6 +64,22 @@ export default function MoisScreen({ navigation, route }) {
   const [showEventModal, setShowEventModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
 
+  // Gère la navigation depuis AnneeScreen
+  useEffect(() => {
+    if (route.params?.initialYear !== undefined && route.params?.initialMonth !== undefined) {
+      const { initialYear, initialMonth } = route.params;
+      const targetDate = new Date(initialYear, initialMonth, 1);
+      const newMonth = format(targetDate, 'yyyy-MM-01');
+      
+      setCurrentMonth(newMonth);
+      setSelectedDate(format(targetDate, 'yyyy-MM-dd'));
+
+      // Nettoyer les paramètres pour éviter qu'ils persistent
+      navigation.setParams({ initialYear: undefined, initialMonth: undefined });
+    }
+  }, [route.params?.initialYear, route.params?.initialMonth]);
+
+
   // Réinitialiser les paramètres de navigation après utilisation
   useEffect(() => {
     if (initialYear !== undefined && initialMonth !== undefined) {
@@ -240,6 +256,7 @@ export default function MoisScreen({ navigation, route }) {
       <View style={styles.calendarWrapper}>
         <View style={styles.calendarContainer}>
         <Calendar
+          key={currentMonth} // Force le re-rendu lorsque le mois change
           current={currentMonth}
           onDayPress={handleDayPress}
           onMonthChange={handleMonthChange}
