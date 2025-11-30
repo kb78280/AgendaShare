@@ -1,4 +1,4 @@
-import React, { useState, useLayoutEffect, useEffect } from 'react';
+import React, { useState, useLayoutEffect, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   BackHandler,
   Vibration,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
@@ -63,6 +64,18 @@ export default function MoisScreen({ navigation, route }) {
   const [showSearch, setShowSearch] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await eventService.initialize();
+    } catch (error) {
+      console.error("Failed to refresh events:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
   // Gère la navigation depuis AnneeScreen
   useEffect(() => {
@@ -380,6 +393,14 @@ export default function MoisScreen({ navigation, route }) {
               style={styles.eventsList}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.eventsListContent}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={['#2196F3']}
+                  tintColor="#2196F3"
+                />
+              }
             >
               {eventsOfSelectedDate.map((event, index) => (
                 <TouchableOpacity 

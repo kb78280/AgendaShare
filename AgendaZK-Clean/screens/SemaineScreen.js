@@ -1,5 +1,5 @@
-import React, { useLayoutEffect, useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useLayoutEffect, useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, parseISO, isWithinInterval } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -15,6 +15,18 @@ export default function SemaineScreen({ navigation }) {
   const [showEventModal, setShowEventModal] = useState(false);
   const [selectedEventData, setSelectedEventData] = useState(null);
   const scrollViewRef = useRef(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await eventService.initialize();
+    } catch (error) {
+      console.error("Failed to refresh events:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
   useLayoutEffect(() => {
     const dateString = format(new Date(), 'EEE d MMM', { locale: fr });
@@ -167,7 +179,18 @@ export default function SemaineScreen({ navigation }) {
         ))}
       </View>
 
-      <ScrollView ref={scrollViewRef} style={styles.timeSlots}>
+      <ScrollView 
+        ref={scrollViewRef} 
+        style={styles.timeSlots}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#2196F3']}
+            tintColor="#2196F3"
+          />
+        }
+      >
         {Array.from({ length: 24 }, (_, hour) => (
           <View key={hour} style={styles.timeSlot}>
             <Text style={styles.timeText}>{hour.toString().padStart(2, '0')}:00</Text>
