@@ -208,25 +208,6 @@ class FirebaseService {
     }
   }
 
-  async getEvents() {
-    try {
-      const q = query(this.eventsCollection, orderBy('startDate', 'asc'));
-      const snapshot = await getDocs(q);
-      
-      const events = [];
-      snapshot.forEach(doc => {
-        events.push({
-          id: doc.id,
-          ...doc.data(),
-        });
-      });
-      
-      return events;
-    } catch (error) {
-      console.error('Error getting events:', error);
-      throw error;
-    }
-  }
 
   async getEventsByDateRange(startDate, endDate) {
     try {
