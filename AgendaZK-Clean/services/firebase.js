@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
 import { 
   getFirestore, 
   collection, 
@@ -21,6 +22,7 @@ import firebaseConfig from '../config/firebase';
 class FirebaseService {
   constructor() {
     this.app = initializeApp(firebaseConfig);
+    this.auth = getAuth(this.app);
     this.db = getFirestore(this.app);
     this.eventsCollection = collection(this.db, 'events');
     this.usersCollection = collection(this.db, 'users');
@@ -300,24 +302,58 @@ class FirebaseService {
   }
 
   // Écouter les changements en temps réel
-  subscribeToEvents(callback) {
-    const q = query(this.eventsCollection, orderBy('startDate', 'asc'));
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const events = [];
-        snapshot.forEach(doc => {
-          events.push({
-            id: doc.id,
-            ...doc.data(),
-          });
-        });
-        callback(events);
-      },
-      (error) => {
-        console.error('Error listening to events:', error);
-      }
+  subscribeToEvents(currentUserUid, callback) {
+    if (!currentUserUid) {
+      console.error("subscribeToEvents a été appelé sans UID utilisateur.");
+      return () => {}; // Retourne une fonction de désinscription vide
+    }
+
+    // Requête pour les événements de l'utilisateur
+    const userEventsQuery = query(
+      this.eventsCollection, 
+      where('ownerUid', '==', currentUserUid),
+      orderBy('startDate', 'asc')
     );
+
+    // Requête pour les événements publics des autres utilisateurs
+    const publicEventsQuery = query(
+      this.eventsCollection,
+      where('ownerUid', '!=', currentUserUid),
+      where('visibility', '==', 'public'),
+      orderBy('startDate', 'asc')
+    );
+
+    const unsubscribes = [];
+    let allEvents = new Map();
+
+    const processSnapshot = (snapshot) => {
+      snapshot.docs.forEach(doc => {
+        allEvents.set(doc.id, {
+          id: doc.id,
+          ...doc.data(),
+        });
+      });
+      // Convertir la Map en tableau et trier
+      const sortedEvents = Array.from(allEvents.values()).sort((a, b) => {
+        if (a.startDate < b.startDate) return -1;
+        if (a.startDate > b.startDate) return 1;
+        return 0;
+      });
+      callback(sortedEvents);
+    };
+
+    const onError = (error) => {
+      console.error('Error listening to events:', error);
+    };
+
+    // S'abonner aux deux requêtes
+    unsubscribes.push(onSnapshot(userEventsQuery, processSnapshot, onError));
+    unsubscribes.push(onSnapshot(publicEventsQuery, processSnapshot, onError));
+
+    // Retourner une fonction pour se désabonner des deux listeners
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
   }
 }
 

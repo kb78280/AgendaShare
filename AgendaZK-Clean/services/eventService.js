@@ -11,8 +11,14 @@ class EventService {
   // Initialiser le service et écouter les changements
   async initialize() {
     try {
+      const currentUser = userService.getCurrentUser();
+      if (!currentUser) {
+        console.warn('Initialisation du service d\'événements sans utilisateur connecté.');
+        return false;
+      }
+      
       // Écouter les changements d'événements en temps réel
-      this.unsubscribe = firebaseService.subscribeToEvents((events) => {
+      this.unsubscribe = firebaseService.subscribeToEvents(currentUser.uid, (events) => {
         this.events = events;
         this.notifyListeners();
       });
@@ -59,7 +65,7 @@ class EventService {
         isAllDay: eventData.isAllDay || false,
         notifications: eventData.notifications || [],
         visibility: eventData.visibility || 'public',
-        createdBy: currentUser.username,
+        ownerUid: currentUser.uid, // Remplacer createdBy par ownerUid
       };
 
       // Créer l'événement en Firebase
@@ -86,7 +92,7 @@ class EventService {
         throw new Error('Événement non trouvé');
       }
 
-      if (existingEvent.createdBy !== currentUser.username) {
+      if (existingEvent.ownerUid !== currentUser.uid) { // Vérifier avec ownerUid
         throw new Error('Vous n\'êtes pas autorisé à modifier cet événement');
       }
 
@@ -130,7 +136,7 @@ class EventService {
         throw new Error('Événement non trouvé');
       }
 
-      if (existingEvent.createdBy !== currentUser.username) {
+      if (existingEvent.ownerUid !== currentUser.uid) { // Vérifier avec ownerUid
         throw new Error('Vous n\'êtes pas autorisé à supprimer cet événement');
       }
 
@@ -245,7 +251,7 @@ class EventService {
       return [];
     }
     
-    return this.events.filter(event => event.createdBy === currentUser.username);
+    return this.events.filter(event => event.ownerUid === currentUser.uid); // Filtrer par ownerUid
   }
 
   // Rechercher des événements par titre
