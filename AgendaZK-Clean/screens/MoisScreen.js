@@ -382,105 +382,107 @@ export default function MoisScreen({ navigation, route }) {
         </View>
         
         <View style={styles.eventsContainer}>
-          {eventsOfSelectedDate.length === 0 ? (
-            <View style={styles.noEventsContainer}>
-              <Ionicons name="calendar-outline" size={48} color="#ccc" />
-              <Text style={styles.noEventsText}>Aucun événement pour ce jour</Text>
-              <Text style={styles.noEventsSubtext}>Appuyez sur le bouton ci-dessous pour en créer un</Text>
-            </View>
-          ) : (
-            <ScrollView 
-              style={styles.eventsList}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.eventsListContent}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  colors={['#2196F3']}
-                  tintColor="#2196F3"
-                />
-              }
-            >
-              {eventsOfSelectedDate.map((event, index) => (
-                <TouchableOpacity 
-                  key={event.id} 
-                  style={[
-                    styles.eventItem,
-                    event.visibility === 'private' && styles.privateEventItem,
-                    index === 0 && styles.firstEventItem,
-                    index === eventsOfSelectedDate.length - 1 && styles.lastEventItem
-                  ]}
-                  onPress={() => handleEditEvent(event)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.eventIndicator} />
-                  <View style={styles.eventContent}>
-                    <View style={styles.eventHeader}>
-                      <Text style={styles.eventTitle} numberOfLines={2}>
-                        {event.title}
-                      </Text>
-                      <View style={styles.eventMeta}>
-                        <Ionicons 
-                          name={event.visibility === 'private' ? 'lock-closed' : 'people'} 
-                          size={14} 
-                          color={event.visibility === 'private' ? '#ff9800' : '#2196F3'} 
-                        />
-                        {event.notifications && event.notifications.length > 0 && (
-                          <Ionicons name="notifications" size={14} color="#666" style={{ marginLeft: 6 }} />
+          <ScrollView
+            style={styles.eventsList}
+            contentContainerStyle={{ flexGrow: 1 }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#2196F3']}
+                tintColor="#2196F3"
+              />
+            }
+          >
+            {eventsOfSelectedDate.length === 0 ? (
+              <View style={styles.noEventsContainer}>
+                <Ionicons name="calendar-outline" size={48} color="#ccc" />
+                <Text style={styles.noEventsText}>Aucun événement pour ce jour</Text>
+                <Text style={styles.noEventsSubtext}>Appuyez sur le bouton ci-dessous pour en créer un</Text>
+              </View>
+            ) : (
+              <View style={styles.eventsListContent}>
+                {eventsOfSelectedDate.map((event, index) => (
+                  <TouchableOpacity 
+                    key={event.id} 
+                    style={[
+                      styles.eventItem,
+                      event.visibility === 'private' && styles.privateEventItem,
+                      index === 0 && styles.firstEventItem,
+                      index === eventsOfSelectedDate.length - 1 && styles.lastEventItem
+                    ]}
+                    onPress={() => handleEditEvent(event)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.eventIndicator} />
+                    <View style={styles.eventContent}>
+                      <View style={styles.eventHeader}>
+                        <Text style={styles.eventTitle} numberOfLines={2}>
+                          {event.title}
+                        </Text>
+                        <View style={styles.eventMeta}>
+                          <Ionicons 
+                            name={event.visibility === 'private' ? 'lock-closed' : 'people'} 
+                            size={14} 
+                            color={event.visibility === 'private' ? '#ff9800' : '#2196F3'} 
+                          />
+                          {event.notifications && event.notifications.length > 0 && (
+                            <Ionicons name="notifications" size={14} color="#666" style={{ marginLeft: 6 }} />
+                          )}
+                        </View>
+                      </View>
+                      
+                      <View style={styles.eventDetails}>
+                        {event.type === 'date_range' && (
+                          <View style={styles.eventDetailRow}>
+                            <Ionicons name="calendar" size={14} color="#2196F3" />
+                            <Text style={styles.eventDates}>
+                              Du {DateUtils.formatDate(event.startDate)} au {DateUtils.formatDate(event.endDate)}
+                            </Text>
+                          </View>
+                        )}
+                        
+                        {!event.isAllDay && event.startTime && (
+                          <View style={styles.eventDetailRow}>
+                            <Ionicons name="time" size={14} color="#666" />
+                            <Text style={styles.eventTime}>
+                              {event.startTime}{event.endTime ? ` - ${event.endTime}` : ''}
+                              {event.endTime && event.type === 'single_day' && (
+                                <Text style={styles.eventDuration}>
+                                  {' '}({DateUtils.formatDuration(DateUtils.calculateDurationInMinutes(event.startTime, event.endTime))})
+                                </Text>
+                              )}
+                            </Text>
+                          </View>
+                        )}
+                        
+                        {event.isAllDay && (
+                          <View style={styles.eventDetailRow}>
+                            <Ionicons name="sunny" size={14} color="#ff9800" />
+                            <Text style={styles.eventTime}>Journée entière</Text>
+                          </View>
                         )}
                       </View>
                     </View>
                     
-                    <View style={styles.eventDetails}>
-                      {event.type === 'date_range' && (
-                        <View style={styles.eventDetailRow}>
-                          <Ionicons name="calendar" size={14} color="#2196F3" />
-                          <Text style={styles.eventDates}>
-                            Du {DateUtils.formatDate(event.startDate)} au {DateUtils.formatDate(event.endDate)}
-                          </Text>
-                        </View>
-                      )}
-                      
-                      {!event.isAllDay && event.startTime && (
-                        <View style={styles.eventDetailRow}>
-                          <Ionicons name="time" size={14} color="#666" />
-                          <Text style={styles.eventTime}>
-                            {event.startTime}{event.endTime ? ` - ${event.endTime}` : ''}
-                            {event.endTime && event.type === 'single_day' && (
-                              <Text style={styles.eventDuration}>
-                                {' '}({DateUtils.formatDuration(DateUtils.calculateDurationInMinutes(event.startTime, event.endTime))})
-                              </Text>
-                            )}
-                          </Text>
-                        </View>
-                      )}
-                      
-                      {event.isAllDay && (
-                        <View style={styles.eventDetailRow}>
-                          <Ionicons name="sunny" size={14} color="#ff9800" />
-                          <Text style={styles.eventTime}>Journée entière</Text>
-                        </View>
-                      )}
+                    <View style={styles.eventActions}>
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDeleteEvent(event.id);
+                        }}
+                        style={styles.deleteButton}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="trash-outline" size={18} color="#ff4444" />
+                      </TouchableOpacity>
                     </View>
-                  </View>
-                  
-                  <View style={styles.eventActions}>
-                    <TouchableOpacity
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleDeleteEvent(event.id);
-                      }}
-                      style={styles.deleteButton}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="trash-outline" size={18} color="#ff4444" />
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </ScrollView>
         </View>
 
         <TouchableOpacity 

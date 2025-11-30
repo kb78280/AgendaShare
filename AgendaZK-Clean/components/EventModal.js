@@ -423,24 +423,42 @@ export default function EventModal({
               <View style={styles.timeRow}>
                 <View style={styles.timeInput}>
                   <Text style={styles.timeLabel}>Début</Text>
-                  <TouchableOpacity 
-                    style={[styles.timeButton, errors.startTime && styles.inputError]}
-                    onPress={() => setShowStartTimePicker(true)}
-                  >
-                    <Text style={styles.timeButtonText}>{startTime || 'HH:mm'}</Text>
-                  </TouchableOpacity>
+                  {Platform.OS === 'web' ? (
+                    <DateTimePicker
+                      value={startTime ? new Date(`1970-01-01T${startTime}`) : new Date()}
+                      mode="time"
+                      display="default"
+                      onChange={(e, t) => onTimeChange(e, t, setStartTime, () => {})}
+                    />
+                  ) : (
+                    <TouchableOpacity 
+                      style={[styles.timeButton, errors.startTime && styles.inputError]}
+                      onPress={() => setShowStartTimePicker(true)}
+                    >
+                      <Text style={styles.timeButtonText}>{startTime || 'HH:mm'}</Text>
+                    </TouchableOpacity>
+                  )}
                   {errors.startTime && <Text style={styles.errorText}>{errors.startTime}</Text>}
                 </View>
                 
                 {eventType === 'single_day' && (
                   <View style={styles.timeInput}>
                     <Text style={styles.timeLabel}>Fin (optionnel)</Text>
-                    <TouchableOpacity 
-                      style={[styles.timeButton, errors.endTime && styles.inputError]}
-                      onPress={() => setShowEndTimePicker(true)}
-                    >
-                      <Text style={styles.timeButtonText}>{endTime || 'HH:mm'}</Text>
-                    </TouchableOpacity>
+                    {Platform.OS === 'web' ? (
+                      <DateTimePicker
+                        value={endTime ? new Date(`1970-01-01T${endTime}`) : new Date()}
+                        mode="time"
+                        display="default"
+                        onChange={(e, t) => onTimeChange(e, t, setEndTime, () => {})}
+                      />
+                    ) : (
+                      <TouchableOpacity 
+                        style={[styles.timeButton, errors.endTime && styles.inputError]}
+                        onPress={() => setShowEndTimePicker(true)}
+                      >
+                        <Text style={styles.timeButtonText}>{endTime || 'HH:mm'}</Text>
+                      </TouchableOpacity>
+                    )}
                     {errors.endTime && <Text style={styles.errorText}>{errors.endTime}</Text>}
                   </View>
                 )}
@@ -570,7 +588,7 @@ export default function EventModal({
           )
         )}
 
-        {showStartTimePicker && (
+        {showStartTimePicker && Platform.OS !== 'web' && (
           <DateTimePicker
             value={startTime ? new Date(`1970-01-01T${startTime}`) : new Date()}
             mode="time"
@@ -580,7 +598,7 @@ export default function EventModal({
           />
         )}
 
-        {showEndTimePicker && (
+        {showEndTimePicker && Platform.OS !== 'web' && (
           <DateTimePicker
             value={endTime ? new Date(`1970-01-01T${endTime}`) : new Date()}
             mode="time"
