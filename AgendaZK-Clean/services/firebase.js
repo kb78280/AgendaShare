@@ -289,6 +289,8 @@ class FirebaseService {
       return () => {}; // Retourne une fonction de désinscription vide
     }
 
+    console.log('🔵 Initialisation de subscribeToEvents pour user:', currentUserUid);
+
     let userEventsCache = [];
     let publicEventsCache = [];
 
@@ -296,15 +298,23 @@ class FirebaseService {
     const mergeAndUpdate = () => {
       const allEvents = new Map();
       
+      console.log('📊 Fusion des événements:');
+      console.log('  - Événements utilisateur:', userEventsCache.length);
+      console.log('  - Événements publics:', publicEventsCache.length);
+      
       // Ajouter les événements de l'utilisateur
       userEventsCache.forEach(event => {
         allEvents.set(event.id, event);
+        console.log('  ✅ Ajout événement user:', event.title, '(owner:', event.ownerUid, ')');
       });
       
       // Ajouter les événements publics (seulement ceux qui ne sont pas déjà dans la map)
       publicEventsCache.forEach(event => {
         if (!allEvents.has(event.id)) {
           allEvents.set(event.id, event);
+          console.log('  ✅ Ajout événement public:', event.title, '(owner:', event.ownerUid, ')');
+        } else {
+          console.log('  ⏭️  Événement déjà présent (ignoré):', event.title);
         }
       });
       
@@ -315,47 +325,59 @@ class FirebaseService {
         return 0;
       });
       
+      console.log('✨ Total final:', sortedEvents.length, 'événements');
       callback(sortedEvents);
     };
 
-    // Requête pour les événements de l'utilisateur (tous)
+    // Requête pour les événements de l'utilisateur (tous) - SANS orderBy
     const userEventsQuery = query(
       this.eventsCollection, 
-      where('ownerUid', '==', currentUserUid),
-      orderBy('startDate', 'asc')
+      where('ownerUid', '==', currentUserUid)
     );
 
-    // Requête pour TOUS les événements publics
+    // Requête pour TOUS les événements publics - SANS orderBy
     const publicEventsQuery = query(
       this.eventsCollection,
-      where('visibility', '==', 'public'),
-      orderBy('startDate', 'asc')
+      where('visibility', '==', 'public')
     );
 
     const onError = (error) => {
-      console.error('Error listening to events:', error);
+      console.error('❌ Error listening to events:', error);
+      console.error('❌ Error code:', error.code);
+      console.error('❌ Error message:', error.message);
     };
 
     // S'abonner aux événements de l'utilisateur
     const unsubscribeUser = onSnapshot(userEventsQuery, (snapshot) => {
-      userEventsCache = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      console.log('🔄 Mise à jour événements utilisateur, nombre:', snapshot.docs.length);
+      userEventsCache = snapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log('  📝 Event user:', data.title, 'visibility:', data.visibility, 'owner:', data.ownerUid);
+        return {
+          id: doc.id,
+          ...data,
+        };
+      });
       mergeAndUpdate();
     }, onError);
 
     // S'abonner aux événements publics
     const unsubscribePublic = onSnapshot(publicEventsQuery, (snapshot) => {
-      publicEventsCache = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      console.log('🔄 Mise à jour événements publics, nombre:', snapshot.docs.length);
+      publicEventsCache = snapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log('  📝 Event public:', data.title, 'visibility:', data.visibility, 'owner:', data.ownerUid);
+        return {
+          id: doc.id,
+          ...data,
+        };
+      });
       mergeAndUpdate();
     }, onError);
 
     // Retourner une fonction pour se désabonner des deux listeners
     return () => {
+      console.log('🔴 Désinscription des listeners pour user:', currentUserUid);
       unsubscribeUser();
       unsubscribePublic();
     };
