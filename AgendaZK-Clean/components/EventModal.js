@@ -70,7 +70,24 @@ export default function EventModal({
 
   // Fonctions pour la gestion des dates
   const openDatePicker = (date, callback) => {
-    setTempDate(new Date(date));
+    console.log('🔍 openDatePicker appelé avec date:', date);
+    
+    // Vérifier que la date est valide
+    let validDate;
+    if (!date || date === '') {
+      console.log('⚠️ Date invalide, utilisation de la date actuelle');
+      validDate = new Date();
+    } else {
+      validDate = new Date(date);
+      // Vérifier que la date créée est valide
+      if (isNaN(validDate.getTime())) {
+        console.log('⚠️ Date invalide après conversion, utilisation de la date actuelle');
+        validDate = new Date();
+      }
+    }
+    
+    console.log('✅ Date utilisée pour le picker:', validDate.toISOString());
+    setTempDate(validDate);
     callback(true);
   };
   
@@ -557,35 +574,43 @@ export default function EventModal({
         )}
         
         {showEndDatePicker && (
-           Platform.OS === 'ios' ? (
-            <View style={styles.pickerModalContainer}>
-              <View style={styles.pickerModal}>
-                <DateTimePicker
-                  value={tempDate}
-                  mode="date"
-                  display="inline"
-                  onChange={(e, d) => handleDateChange(e, d, setShowEndDatePicker)}
-                  locale="fr-FR"
-                />
-                <View style={styles.pickerActions}>
-                  <TouchableOpacity onPress={() => setShowEndDatePicker(false)} style={styles.pickerButton}>
-                    <Text style={styles.pickerButtonText}>Annuler</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={handleEndDateConfirm} style={[styles.pickerButton, styles.pickerButtonConfirm]}>
-                    <Text style={[styles.pickerButtonText, styles.pickerButtonConfirmText]}>Confirmer</Text>
-                  </TouchableOpacity>
+           (() => {
+             console.log('📅 Date picker FIN visible, Platform:', Platform.OS);
+             console.log('   tempDate:', tempDate);
+             return Platform.OS === 'ios' ? (
+              <View style={styles.pickerModalContainer}>
+                <View style={styles.pickerModal}>
+                  <DateTimePicker
+                    value={tempDate}
+                    mode="date"
+                    display="inline"
+                    onChange={(e, d) => handleDateChange(e, d, setShowEndDatePicker)}
+                    locale="fr-FR"
+                  />
+                  <View style={styles.pickerActions}>
+                    <TouchableOpacity onPress={() => setShowEndDatePicker(false)} style={styles.pickerButton}>
+                      <Text style={styles.pickerButtonText}>Annuler</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleEndDateConfirm} style={[styles.pickerButton, styles.pickerButtonConfirm]}>
+                      <Text style={[styles.pickerButtonText, styles.pickerButtonConfirmText]}>Confirmer</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
-            </View>
-          ) : (
-            <DateTimePicker
-              value={new Date(endDate || startDate || selectedDate)}
-              mode="date"
-              display="default"
-              onChange={(e, d) => { setShowEndDatePicker(false); if (d) setEndDate(DateUtils.toISODateString(d)); }}
-              locale="fr-FR"
-            />
-          )
+            ) : (
+              <DateTimePicker
+                value={tempDate}
+                mode="date"
+                display="default"
+                onChange={(e, d) => { 
+                  console.log('📅 Date sélectionnée:', d);
+                  setShowEndDatePicker(false); 
+                  if (d) setEndDate(DateUtils.toISODateString(d)); 
+                }}
+                locale="fr-FR"
+              />
+            );
+           })()
         )}
 
         {showStartTimePicker && Platform.OS !== 'web' && (
