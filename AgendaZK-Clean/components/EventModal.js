@@ -562,6 +562,32 @@ export default function EventModal({
                 </View>
               </View>
             </View>
+          ) : Platform.OS === 'web' ? (
+            <View style={styles.pickerModalContainer}>
+              <View style={styles.pickerModal}>
+                <Text style={styles.pickerTitle}>Sélectionner la date de début</Text>
+                <DateTimePicker
+                  value={tempDate}
+                  mode="date"
+                  display="default"
+                  onChange={(e, d) => {
+                    console.log('📅 Date début changée (web):', d);
+                    if (d) {
+                      setTempDate(d);
+                    }
+                  }}
+                  locale="fr-FR"
+                />
+                <View style={styles.pickerActions}>
+                  <TouchableOpacity onPress={() => setShowStartDatePicker(false)} style={styles.pickerButton}>
+                    <Text style={styles.pickerButtonText}>Annuler</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleStartDateConfirm} style={[styles.pickerButton, styles.pickerButtonConfirm]}>
+                    <Text style={[styles.pickerButtonText, styles.pickerButtonConfirmText]}>Confirmer</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
           ) : (
             <DateTimePicker
               value={new Date(startDate || selectedDate)}
@@ -585,6 +611,32 @@ export default function EventModal({
                     mode="date"
                     display="inline"
                     onChange={(e, d) => handleDateChange(e, d, setShowEndDatePicker)}
+                    locale="fr-FR"
+                  />
+                  <View style={styles.pickerActions}>
+                    <TouchableOpacity onPress={() => setShowEndDatePicker(false)} style={styles.pickerButton}>
+                      <Text style={styles.pickerButtonText}>Annuler</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleEndDateConfirm} style={[styles.pickerButton, styles.pickerButtonConfirm]}>
+                      <Text style={[styles.pickerButtonText, styles.pickerButtonConfirmText]}>Confirmer</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            ) : Platform.OS === 'web' ? (
+              <View style={styles.pickerModalContainer}>
+                <View style={styles.pickerModal}>
+                  <Text style={styles.pickerTitle}>Sélectionner la date de fin</Text>
+                  <DateTimePicker
+                    value={tempDate}
+                    mode="date"
+                    display="default"
+                    onChange={(e, d) => {
+                      console.log('📅 Date fin changée (web):', d);
+                      if (d) {
+                        setTempDate(d);
+                      }
+                    }}
                     locale="fr-FR"
                   />
                   <View style={styles.pickerActions}>
@@ -1050,5 +1102,12 @@ const styles = StyleSheet.create({
   pickerButtonConfirmText: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  pickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2d4150',
+    marginBottom: 16,
+    textAlign: 'center',
   },
 });
