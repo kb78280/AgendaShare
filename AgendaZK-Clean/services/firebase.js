@@ -289,51 +289,75 @@ class FirebaseService {
       return () => {}; // Retourne une fonction de désinscription vide
     }
 
-    // Requête pour les événements de l'utilisateur
+    let userEventsCache = [];
+    let publicEventsCache = [];
+
+    // Fonction pour fusionner et mettre à jour les événements
+    const mergeAndUpdate = () => {
+      const allEvents = new Map();
+      
+      // Ajouter les événements de l'utilisateur
+      userEventsCache.forEach(event => {
+        allEvents.set(event.id, event);
+      });
+      
+      // Ajouter les événements publics (seulement ceux qui ne sont pas déjà dans la map)
+      publicEventsCache.forEach(event => {
+        if (!allEvents.has(event.id)) {
+          allEvents.set(event.id, event);
+        }
+      });
+      
+      // Convertir la Map en tableau et trier par date
+      const sortedEvents = Array.from(allEvents.values()).sort((a, b) => {
+        if (a.startDate < b.startDate) return -1;
+        if (a.startDate > b.startDate) return 1;
+        return 0;
+      });
+      
+      callback(sortedEvents);
+    };
+
+    // Requête pour les événements de l'utilisateur (tous)
     const userEventsQuery = query(
       this.eventsCollection, 
       where('ownerUid', '==', currentUserUid),
       orderBy('startDate', 'asc')
     );
 
-    // Requête pour les événements publics des autres utilisateurs
+    // Requête pour TOUS les événements publics
     const publicEventsQuery = query(
       this.eventsCollection,
-      where('ownerUid', '!=', currentUserUid),
       where('visibility', '==', 'public'),
       orderBy('startDate', 'asc')
     );
-
-    const unsubscribes = [];
-    let allEvents = new Map();
-
-    const processSnapshot = (snapshot) => {
-      snapshot.docs.forEach(doc => {
-        allEvents.set(doc.id, {
-          id: doc.id,
-          ...doc.data(),
-        });
-      });
-      // Convertir la Map en tableau et trier
-      const sortedEvents = Array.from(allEvents.values()).sort((a, b) => {
-        if (a.startDate < b.startDate) return -1;
-        if (a.startDate > b.startDate) return 1;
-        return 0;
-      });
-      callback(sortedEvents);
-    };
 
     const onError = (error) => {
       console.error('Error listening to events:', error);
     };
 
-    // S'abonner aux deux requêtes
-    unsubscribes.push(onSnapshot(userEventsQuery, processSnapshot, onError));
-    unsubscribes.push(onSnapshot(publicEventsQuery, processSnapshot, onError));
+    // S'abonner aux événements de l'utilisateur
+    const unsubscribeUser = onSnapshot(userEventsQuery, (snapshot) => {
+      userEventsCache = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      mergeAndUpdate();
+    }, onError);
+
+    // S'abonner aux événements publics
+    const unsubscribePublic = onSnapshot(publicEventsQuery, (snapshot) => {
+      publicEventsCache = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      mergeAndUpdate();
+    }, onError);
 
     // Retourner une fonction pour se désabonner des deux listeners
     return () => {
-      unsubscribes.forEach(unsub => unsub());
+      unsubscribeUser();
+      unsubscribePublic();
     };
   }
 }
